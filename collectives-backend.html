@@ -92,8 +92,27 @@
   .ed-head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;border-radius:14px;padding:14px 16px;margin-bottom:16px}
   .ed-head h2{margin:0;font-size:16px}
   .ed-head .code{font-size:12.5px;color:var(--gold3);font-weight:700;margin-top:2px}
-  .btn-del{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.3);color:#fff;padding:7px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600}
-  .btn-del:hover{background:rgba(217,83,79,.5)}
+  /* status tag: PENDING=green, VOID=black, FINISHED=blue */
+  .st{font-size:11.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;border-radius:20px;
+      padding:7px 14px;border:2px solid rgba(255,255,255,.35);color:#fff;cursor:pointer;font-family:inherit;
+      appearance:none;-webkit-appearance:none;text-align:center;background-image:none}
+  .st:disabled,.st.badge{cursor:default;opacity:1}
+  .st-pending{background:#1FA971}
+  .st-void{background:#11151C}
+  .st-finished{background:#1E5AA8}
+  .st option{background:#fff;color:var(--ink);font-weight:700}
+  .st-wrap{display:flex;align-items:center;gap:8px}
+  .st-wrap .lbl{font-size:9.5px;color:#9FB6CE;font-weight:700;letter-spacing:.4px;text-align:right;line-height:1.3}
+  .btn-void{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.3);color:#fff;padding:7px 11px;
+            border-radius:8px;cursor:pointer;font-size:11.5px;font-weight:700;font-family:inherit;white-space:nowrap}
+  .btn-void:hover{background:rgba(17,21,28,.85);border-color:#11151C}
+  /* small dot version for the tree + tables */
+  .stdot{display:inline-block;width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+  .stdot.st-pending{background:#1FA971}.stdot.st-void{background:#11151C}.stdot.st-finished{background:#1E5AA8}
+  .sttag{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:800;letter-spacing:.3px;
+         padding:2px 8px;border-radius:20px;text-transform:uppercase;color:#fff}
+  .sttag.st-pending{background:#1FA971}.sttag.st-void{background:#11151C}.sttag.st-finished{background:#1E5AA8}
+  tr.voided td{opacity:.5}
 
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
   label.f{display:flex;flex-direction:column;gap:4px}
@@ -960,6 +979,36 @@ const uid = () => "e" + Math.random().toString(36).slice(2, 10) + Date.now().toS
 const num = (v) => { const n = Number(v); return isFinite(n) ? n : 0; };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const money = (n) => (n < 0 ? "-" + PESO : PESO) + Math.abs(num(n)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** whole numbers with thousand separators: 1803 -> "1,803" */
+const qty = (n) => num(n).toLocaleString("en-US");
+
+/* ===== departure status =====
+ * PENDING  = the travel date hasn't happened yet   (automatic)
+ * FINISHED = the travel date is done               (automatic)
+ * VOID     = voided                                (set by an admin)
+ * Only VOID is stored. PENDING/FINISHED are derived from the travel date every
+ * render, so a departure flips to FINISHED by itself the day the trip ends.
+ */
+const STATUSES = ["PENDING", "FINISHED", "VOID"];
+/** End of the travel range: "5/16/2026 - 5/21/2026" -> 21 May 2026. */
+function travelEndOf(e) {
+  const raw = ("" + ((e && e.travelRaw) || "")).trim();
+  if (!raw) return null;
+  const parts = raw.split(/\s+-\s+/);            // space-dash-space, so "5/16/2026" stays intact
+  const last = (parts[parts.length - 1] || "").trim();
+  const d = new Date(last);                       // "5/21/2026" / "01/02/2027"
+  if (isNaN(d)) return null;
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+function stOf(e) {
+  if (e && e.voided) return "VOID";
+  const end = travelEndOf(e);
+  if (!end) return "PENDING";                     // no usable travel date -> treat as upcoming
+  return end < startOfToday() ? "FINISHED" : "PENDING";
+}
+const stClass = (s) => (s === "VOID" ? "st-void" : s === "FINISHED" ? "st-finished" : "st-pending");
 const parseD = (s) => (s ? new Date(s + "T00:00:00") : null);
 const daysBetween = (a, b) => Math.max(0, Math.round((b - a) / 86400000));
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -987,6 +1036,7 @@ function seedDB() {
       slot: r.slot ?? 0,
       foc: r.foc ?? 0,
       remainingBalanceToCollect: r.remainingBalanceToCollect ?? null,
+      voided: false, // PENDING/FINISHED come from the travel date; only VOID is stored
       payments:
         r.openingPayment && num(r.openingPayment) !== 0
           ? [{ id: uid(), date: r.holdingDate || "", amount: num(r.openingPayment), note: "Opening payment (imported from file)" }]
@@ -1003,6 +1053,9 @@ function seedDB() {
 /** Bring any stored/imported entry up to the current shape (adds the sales log). */
 function migrateEntry(e) {
   if (!e || typeof e !== "object") return null;
+  // older saves used a manual `status` string; keep only the VOID part
+  if (typeof e.voided !== "boolean") e.voided = e.status === "VOID";
+  delete e.status; // PENDING/FINISHED are derived from the travel date now
   if (!Array.isArray(e.payments)) e.payments = [];
   if (!Array.isArray(e.sales)) {
     const slots = num(e.slotSold), amount = num(e.collected);
@@ -1238,8 +1291,10 @@ function renderStatsDD() {
 function renderPackageDashboard(host) {
   const all = statsPkg === "__ALL__";
   const list = all ? DB.entries : DB.entries.filter((e) => e.package === statsPkg);
+  const voided = list.filter((e) => stOf(e) === "VOID");
+  const live = list.filter((e) => stOf(e) !== "VOID"); // VOID drops out of the totals
   const t = { cost: 0, paid: 0, bal: 0, coll: 0, profit: 0, slots: 0, sold: 0, rem: 0 };
-  list.forEach((e) => {
+  live.forEach((e) => {
     const d = derive(e);
     t.cost += num(e.totalCost); t.paid += d.paid; t.bal += d.balance;
     t.coll += d.collected; t.profit += d.profit;
@@ -1248,21 +1303,27 @@ function renderPackageDashboard(host) {
   const roi = t.cost ? (t.profit / t.cost) * 100 : 0;
   const sell = t.slots ? (t.sold / t.slots) * 100 : 0;
   const pkgs = new Set(list.map((e) => e.package).filter(Boolean)).size;
+  const cnt = (s) => list.filter((e) => stOf(e) === s).length;
   const tile = (l, v, c) => `<div class="tile ${c || ""}"><div class="t-l">${l}</div><div class="t-v">${v}</div></div>`;
   host.innerHTML = `
     <div class="ed-head">
       <div><h2>${esc(all ? "All Packages" : statsPkg)}</h2>
-        <div class="code">PACKAGE DASHBOARD &middot; ${list.length} DEPARTURE${list.length === 1 ? "" : "S"}${all ? ` &middot; ${pkgs} PACKAGES` : ""}</div></div>
+        <div class="code">PACKAGE DASHBOARD &middot; ${qty(live.length)} ACTIVE DEPARTURE${live.length === 1 ? "" : "S"}${all ? ` &middot; ${qty(pkgs)} PACKAGES` : ""}</div></div>
+      <div class="st-wrap">
+        <span class="sttag st-pending">${qty(cnt("PENDING"))} pending</span>
+        <span class="sttag st-finished">${qty(cnt("FINISHED"))} finished</span>
+        <span class="sttag st-void">${qty(cnt("VOID"))} void</span>
+      </div>
     </div>
 
     <section class="card">
       <h3>Slots</h3>
-      <p class="sub">Inventory across ${all ? "every package" : "this package"}.</p>
+      <p class="sub">Inventory across ${all ? "every package" : "this package"}.${voided.length ? ` <b>${qty(voided.length)} VOID departure${voided.length === 1 ? "" : "s"} excluded from all totals below.</b>` : ""}</p>
       <div class="tiles">
-        ${tile("Departures", list.length)}
-        ${tile("Total Slots", t.slots)}
-        ${tile("Slots Sold", t.sold, "green")}
-        ${tile("Remaining", t.rem, t.rem > 0 ? "gold" : "green")}
+        ${tile("Departures", qty(live.length))}
+        ${tile("Total Slots", qty(t.slots))}
+        ${tile("Slots Sold", qty(t.sold), "green")}
+        ${tile("Remaining", qty(t.rem), t.rem > 0 ? "gold" : "green")}
         ${tile("Sell-through", sell.toFixed(1) + "%", sell >= 75 ? "green" : "gold")}
       </div>
       <div class="pbar"><i style="width:${Math.max(0, Math.min(100, sell)).toFixed(1)}%"></i></div>
@@ -1286,29 +1347,30 @@ function renderPackageDashboard(host) {
       <p class="sub">Click any row to open it.</p>
       <div style="overflow-x:auto">
       <table><thead><tr>
-        ${all ? "<th>Package</th>" : ""}<th>Tour Code</th><th>Travel Date</th>
+        ${all ? "<th>Package</th>" : ""}<th>Tour Code</th><th>Status</th><th>Travel Date</th>
         <th class="num">Slots</th><th class="num">Sold</th><th class="num">Left</th>
         <th class="num">Cost</th><th class="num">Paid</th><th class="num">Balance</th>
         <th class="num">Collected</th><th class="num">Profit</th><th class="num">ROI</th>
       </tr></thead><tbody>
-        ${list.map((e) => { const d = derive(e); return `<tr data-open="${e.id}" style="cursor:pointer">
+        ${list.map((e) => { const d = derive(e); const s = stOf(e); return `<tr data-open="${e.id}" style="cursor:pointer" class="${s === "VOID" ? "voided" : ""}">
           ${all ? `<td>${esc(e.package || "(no package)")}</td>` : ""}
           <td><span class="pkg-name">${esc(e.tourCode || "(untitled)")}</span></td>
+          <td><span class="sttag ${stClass(s)}">${s}</span></td>
           <td>${esc(e.travelRaw || "—")}</td>
-          <td class="num">${d.totalSlots}</td>
-          <td class="num">${d.slotSold}</td>
-          <td class="num">${d.remaining}</td>
+          <td class="num">${qty(d.totalSlots)}</td>
+          <td class="num">${qty(d.slotSold)}</td>
+          <td class="num">${qty(d.remaining)}</td>
           <td class="num">${money(e.totalCost)}</td>
           <td class="num">${money(d.paid)}</td>
           <td class="num ${d.balance >= CENT ? "neg" : "pos"}">${money(d.balance)}</td>
           <td class="num">${money(d.collected)}</td>
           <td class="num ${d.profit >= 0 ? "pos" : "neg"}">${money(d.profit)}</td>
           <td class="num ${d.roi >= 0 ? "" : "neg"}">${d.roi.toFixed(2)}%</td>
-        </tr>`; }).join("") || `<tr><td colspan="12" style="text-align:center;padding:22px;color:var(--muted)">No departures in this package.</td></tr>`}
+        </tr>`; }).join("") || `<tr><td colspan="13" style="text-align:center;padding:22px;color:var(--muted)">No departures in this package.</td></tr>`}
       </tbody>
       <tfoot><tr class="totrow">
-        ${all ? "<td></td>" : ""}<td>TOTAL</td><td>${list.length} dep</td>
-        <td class="num">${t.slots}</td><td class="num">${t.sold}</td><td class="num">${t.rem}</td>
+        ${all ? "<td></td>" : ""}<td>TOTAL</td><td>${voided.length ? qty(voided.length) + " void excl." : ""}</td><td>${qty(live.length)} dep</td>
+        <td class="num">${qty(t.slots)}</td><td class="num">${qty(t.sold)}</td><td class="num">${qty(t.rem)}</td>
         <td class="num">${money(t.cost)}</td><td class="num">${money(t.paid)}</td><td class="num">${money(t.bal)}</td>
         <td class="num">${money(t.coll)}</td><td class="num">${money(t.profit)}</td><td class="num">${roi.toFixed(2)}%</td>
       </tr></tfoot></table></div>
@@ -1330,10 +1392,10 @@ function renderTree() {
   host.innerHTML = groups.map(([pkg, list]) => {
     const open = q ? true : sel.pkg === pkg;
     const codes = open ? `<div class="codes">${list.map((e) => {
-        const d = derive(e);
+        const d = derive(e); const s = stOf(e);
         return `<button class="code-btn ${e.id === sel.id ? "active" : ""}" data-id="${e.id}">
-            <span>${esc(e.tourCode || "(untitled)")}</span>
-            <span class="sub">${d.remaining} left</span></button>`;
+            <span><i class="stdot ${stClass(s)}" title="${s}"></i> ${esc(e.tourCode || "(untitled)")}</span>
+            <span class="sub">${s === "VOID" ? "void" : qty(d.remaining) + " left"}</span></button>`;
       }).join("")}
       ${isAdmin() ? `<button class="add-btn" data-newcode="${esc(pkg)}">＋ New Tour Code</button>` : ""}</div>` : "";
     return `<div class="pkg">
@@ -1345,10 +1407,23 @@ function renderTree() {
 }
 
 /* ============================== editor ============================== */
-const F = (label, key, type, val, hint) =>
-  `<label class="f"><span>${label}</span>
-     <input data-field="${key}" type="${type}" ${type === "number" ? 'step="any"' : ""} value="${esc(val ?? "")}" ${editing ? "" : "disabled"}>
+/**
+ * kind: "money" | "int" | "text" | "date"
+ * Frozen  -> a text box showing the value with thousand separators (readable).
+ * Editing -> a real number box with the raw value (type="number" can't hold commas).
+ */
+const F = (label, key, kind, val, hint) => {
+  const isNum = kind === "money" || kind === "int";
+  let type = kind === "date" ? "date" : kind === "text" ? "text" : "number";
+  let v = val ?? "";
+  if (!editing && isNum) {
+    type = "text";
+    v = val === null || val === undefined || val === "" ? "" : kind === "money" ? money(val) : qty(val);
+  }
+  return `<label class="f"><span>${label}</span>
+     <input data-field="${key}" type="${type}" ${type === "number" ? 'step="any"' : ""} value="${esc(v)}" ${editing ? "" : "disabled"}>
      ${hint ? `<small>${hint}</small>` : ""}</label>`;
+};
 
 function renderEditor() {
   const e = current();
@@ -1365,7 +1440,11 @@ function renderEditor() {
   host.innerHTML = `
     <div class="ed-head">
       <div><h2>${esc(e.package || "(no package)")}</h2><div class="code">${esc(e.tourCode || "(untitled)")}</div></div>
-      ${isAdmin() ? `<button class="btn-del" data-del="1">🗑 Delete Entry</button>` : ""}
+      <div class="st-wrap">
+        <span class="lbl">STATUS<br><span style="font-weight:600;opacity:.75">${e.voided ? "voided" : "from travel date"}</span></span>
+        <span class="st badge ${stClass(stOf(e))}" title="${e.voided ? "Voided" : (travelEndOf(e) ? "Travel ends " + fmtDate(travelEndOf(e)) : "No travel date set")}">${stOf(e)}</span>
+        ${isAdmin() ? `<button class="btn-void" data-void="${e.voided ? 0 : 1}">${e.voided ? "↺ Restore" : "⃠ Mark VOID"}</button>` : ""}
+      </div>
     </div>
 
     <section class="card">
@@ -1384,13 +1463,13 @@ function renderEditor() {
         ${F("Travel Date", "travelRaw", "text", e.travelRaw, "e.g. 5/16/2026 - 5/21/2026")}
         ${F("Holding Date", "holdingDate", "date", e.holdingDate)}
         ${F("Sold Out Date", "soldOutDate", "date", e.soldOutDate, "leave blank if still selling")}
-        ${F("Total Cost", "totalCost", "number", e.totalCost)}
-        ${F("Slot (paid)", "slot", "number", e.slot)}
-        ${F("FOC", "foc", "number", e.foc)}
-        ${F("Amount / Pax (before commi)", "amountPerPax", "number", e.amountPerPax)}
-        ${F("Expected Profit / Person", "expProfitPerPerson", "number", e.expProfitPerPerson)}
-        ${F("Est. Profit / Departure", "estProfitPerDeparture", "number", e.estProfitPerDeparture)}
-        ${F("Remaining Balance to Collect", "remainingBalanceToCollect", "number", e.remainingBalanceToCollect)}
+        ${F("Total Cost", "totalCost", "money", e.totalCost)}
+        ${F("Slot (paid)", "slot", "int", e.slot)}
+        ${F("FOC", "foc", "int", e.foc)}
+        ${F("Amount / Pax (before commi)", "amountPerPax", "money", e.amountPerPax)}
+        ${F("Expected Profit / Person", "expProfitPerPerson", "money", e.expProfitPerPerson)}
+        ${F("Est. Profit / Departure", "estProfitPerDeparture", "money", e.estProfitPerDeparture)}
+        ${F("Remaining Balance to Collect", "remainingBalanceToCollect", "money", e.remainingBalanceToCollect)}
       </div>
       <div class="ed-actions">
         ${isAdmin()
@@ -1455,12 +1534,12 @@ function renderSales() {
     ? `<table><thead><tr><th>Date</th><th class="num">Slots</th><th class="num">Collected</th><th>Note</th><th></th></tr></thead>
        <tbody>${rows.map((x) => `<tr>
             <td>${esc(x.date || "—")}</td>
-            <td class="num">${num(x.slots)}</td>
+            <td class="num">${qty(x.slots)}</td>
             <td class="num">${money(x.amount)}</td>
             <td>${esc(x.note || "")}</td>
             <td style="text-align:right">${isAdmin() ? `<button class="btn-x" data-delsale="${x.id}" title="Delete sale">✕</button>` : ""}</td>
           </tr>`).join("")}</tbody>
-       <tfoot><tr class="totrow"><td>TOTAL (${rows.length})</td><td class="num">${slots}</td><td class="num">${money(amount)}</td><td></td><td></td></tr></tfoot></table>`
+       <tfoot><tr class="totrow"><td>TOTAL (${rows.length})</td><td class="num">${qty(slots)}</td><td class="num">${money(amount)}</td><td></td><td></td></tr></tfoot></table>`
     : `<div class="empty">No sales logged yet. Add the first one below.</div>`;
 }
 
@@ -1485,9 +1564,9 @@ function renderDerived() {
   const d = derive(e);
   const tile = (label, val, cls) => `<div class="tile ${cls || ""}"><div class="t-l">${label}</div><div class="t-v">${val}</div></div>`;
   document.getElementById("derived").innerHTML = [
-    tile("Total Slots", d.totalSlots),
-    tile("Slot Sold", d.slotSold),
-    tile("Remaining Slot", d.remaining, d.remaining < 0 ? "red" : d.remaining > 0 ? "gold" : "green"),
+    tile("Total Slots", qty(d.totalSlots)),
+    tile("Slot Sold", qty(d.slotSold)),
+    tile("Remaining Slot", qty(d.remaining), d.remaining < 0 ? "red" : d.remaining > 0 ? "gold" : "green"),
     tile("Collected from Pax", money(d.collected)),
     tile("Current Payment", money(d.paid)),
     tile("Balance Payable", money(d.balance), d.balance > 0 ? "red" : "green"),
@@ -1518,13 +1597,8 @@ function newPackage() {
   if (!name || !name.trim()) return;
   newEntry(name.trim());
 }
-function deleteEntry() {
-  if (!isAdmin()) { alert(DENY); return; }
-  const e = current(); if (!e) return;
-  if (!confirm(`Delete "${e.tourCode || "(untitled)"}" from ${e.package}?\n\nThis cannot be undone.`)) return;
-  DB.entries = DB.entries.filter((x) => x.id !== e.id);
-  sel.id = null; save(); renderTree(); renderEditor();
-}
+// NOTE: hard delete was removed on purpose. Tag a departure VOID instead — it stays
+// on file (audit trail intact) and drops out of the dashboard totals.
 function addPayment() {
   const e = current(); if (!e) return;
   const d = derive(e);
@@ -1594,9 +1668,9 @@ function dl(fn, content) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = fn; a.click(); URL.revokeObjectURL(a.href);
 }
 function exportCSV() {
-  const head = ["PACKAGE","TOUR CODE","TRAVEL DATE","AMOUNT PER PAX BEFORE COMMI","EXPECTED PROFIT / person","ESTIMATED PROFIT PER DEPARTURE","HOLDING DATE","TOTAL COST","CURRENT PAYMENT TO SUPPLIER","BALANCE PAYABLE TO SUPPLIER","SLOT","FOC","TOTAL SLOTS","SOLD OUT DATE","#OF DAYS TO SOLD OUT","SLOT SOLD","REMAINING SLOT","COLLECTED FROM PAX","REMAINING BALANCE TO COLLECT","PROFIT","ROI","PER DAY","PER WEEK"];
+  const head = ["PACKAGE","TOUR CODE","STATUS","TRAVEL DATE","AMOUNT PER PAX BEFORE COMMI","EXPECTED PROFIT / person","ESTIMATED PROFIT PER DEPARTURE","HOLDING DATE","TOTAL COST","CURRENT PAYMENT TO SUPPLIER","BALANCE PAYABLE TO SUPPLIER","SLOT","FOC","TOTAL SLOTS","SOLD OUT DATE","#OF DAYS TO SOLD OUT","SLOT SOLD","REMAINING SLOT","COLLECTED FROM PAX","REMAINING BALANCE TO COLLECT","PROFIT","ROI","PER DAY","PER WEEK"];
   const lines = DB.entries.map((e) => { const d = derive(e);
-    return [e.package,e.tourCode,e.travelRaw,e.amountPerPax,e.expProfitPerPerson,e.estProfitPerDeparture,e.holdingDate,
+    return [e.package,e.tourCode,stOf(e),e.travelRaw,e.amountPerPax,e.expProfitPerPerson,e.estProfitPerDeparture,e.holdingDate,
       num(e.totalCost).toFixed(2), d.paid.toFixed(2), d.balance.toFixed(2), e.slot, e.foc, d.totalSlots, e.soldOutDate,
       d.daysToSoldOut ?? "", d.slotSold, d.remaining, d.collected.toFixed(2), e.remainingBalanceToCollect ?? "",
       d.profit.toFixed(2), d.roi.toFixed(2) + "%", d.perDay.toFixed(2), d.perWeek.toFixed(2)].map(cell).join(",");
@@ -1706,6 +1780,18 @@ document.getElementById("editor").addEventListener("change", (ev) => {
 document.getElementById("editor").addEventListener("click", (ev) => {
   const open = ev.target.closest("[data-open]");            // dashboard table row -> open that departure
   if (open) return selectEntry(open.dataset.open);
+  const v = ev.target.closest("[data-void]");               // VOID is the only manual status
+  if (v) {
+    if (!isAdmin()) { alert(DENY); return; }
+    const e = current(); if (!e) return;
+    if (v.dataset.void === "1") {
+      if (!confirm(`Mark "${e.tourCode || "(untitled)"}" as VOID?\n\nIt stays on file with its full payment history, but drops out of the package dashboard totals.`)) return;
+      e.voided = true;
+    } else {
+      e.voided = false; // back to PENDING/FINISHED, decided by the travel date
+    }
+    save(); renderEditor(); renderTree(); return;
+  }
   if (ev.target.closest("[data-toggleedit]")) {
     if (!isAdmin()) { alert(DENY); return; }
     editing = !editing; renderEditor(); return;
@@ -1716,7 +1802,6 @@ document.getElementById("editor").addEventListener("click", (ev) => {
   if (dp) return deletePayment(dp.dataset.delpay);
   const ds = ev.target.closest("[data-delsale]");
   if (ds) return deleteSale(ds.dataset.delsale);
-  if (ev.target.closest("[data-del]")) return deleteEntry();
 });
 document.getElementById("search").addEventListener("input", (ev) => { sel.q = ev.target.value; renderTree(); });
 
