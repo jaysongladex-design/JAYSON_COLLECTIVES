@@ -1,0 +1,36 @@
+# ---------------------------------------------------------------------------
+# NEVER COMMIT SUPABASE DATA OR CREDENTIALS
+# The anon key can read every booking (RLS is permissive), so the key and any
+# data pulled from Supabase — customer names, balances, GDX records — must stay
+# local. This applies to the whole repo.
+# ---------------------------------------------------------------------------
+.env
+*.env
+!.env.example
+**/.env
+
+# Anything exported/derived from the Supabase booking data (real customer PII)
+Collectives - Missing Supplier Costs.csv
+*supplier-costs*.csv
+*bookings*.csv
+*receivables*.csv
+*collectives-export*.csv
+*collectives-payments*.csv
+supabase-*.csv
+supabase-*.json
+records*.json
+
+# Local tooling & unrelated projects
+.claude/
+Airasia-Project/
+
+# Local-only readme (GitHub uses README.md)
+README - Collectives Dashboard.md
+
+# OS / editor junk
+node_modules/
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.log
+*~

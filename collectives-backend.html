@@ -1,0 +1,1744 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Collectives Back Office</title>
+<style>
+  :root{
+    --navy:#0B2A4A; --navy2:#0F355E; --blue:#1E5AA8; --blue2:#3B82C4;
+    --gold:#C9A227; --gold2:#D4AF37; --gold3:#E9C46A;
+    --bg:#EEF2F8; --panel:#fff; --ink:#0E2136; --muted:#5B6B7F; --line:#E1E8F2;
+    --green:#1FA971; --amber:#E1A128; --red:#D9534F;
+    --shadow:0 6px 22px rgba(11,42,74,.08); --shadow2:0 2px 10px rgba(11,42,74,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.45}
+  button{font-family:inherit}
+
+  /* Header */
+  header.topbar{background:linear-gradient(120deg,var(--navy),var(--navy2) 60%,#123c69);color:#fff;border-bottom:4px solid var(--gold);box-shadow:var(--shadow);padding:14px 20px;display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+  .brand{display:flex;align-items:center;gap:12px}
+  .logo{width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,var(--gold2),var(--gold));display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--navy);font-size:16px}
+  .brand h1{margin:0;font-size:17px;letter-spacing:.3px}
+  .brand p{margin:2px 0 0;font-size:11.5px;color:#B9CBE0;letter-spacing:.4px}
+  .actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .btn{border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#fff;padding:8px 12px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer}
+  .btn:hover{background:rgba(255,255,255,.18)}
+  .btn.gold{background:linear-gradient(135deg,var(--gold2),var(--gold));color:var(--navy);border-color:transparent}
+  .btn.danger{background:rgba(217,83,79,.25);border-color:rgba(217,83,79,.5)}
+  .saved{font-size:12px;color:#B9CBE0;display:flex;align-items:center;gap:6px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block}
+
+  /* Layout */
+  .app{display:grid;grid-template-columns:320px 1fr;gap:16px;max-width:1500px;margin:0 auto;padding:16px 20px 60px;align-items:start}
+  @media(max-width:900px){ .app{grid-template-columns:1fr} }
+
+  /* Sidebar */
+  .sidebar{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow2);padding:12px;position:sticky;top:88px;max-height:calc(100vh - 110px);overflow:auto}
+  .search{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;margin-bottom:10px}
+  .search:focus{outline:none;border-color:var(--blue2);box-shadow:0 0 0 3px rgba(59,130,196,.15)}
+  /* dashboard dropdown: click -> packages pop up -> pick one -> dashboard appears */
+  .dd{position:relative;margin-bottom:12px}
+  .dd-btn{width:100%;text-align:left;background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;border:none;border-radius:10px;padding:10px 30px 10px 12px;font-size:12.5px;font-weight:700;cursor:pointer;position:relative}
+  .dd-btn:hover{filter:brightness(1.12)}
+  .dd-btn::after{content:"▾";position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--gold3);font-size:11px}
+  .dd-btn.open::after{content:"▴"}
+  .dd-btn .sub{display:block;font-size:9.5px;color:#9FB6CE;font-weight:600;margin-top:2px;letter-spacing:.3px}
+  .dd-panel{position:absolute;top:calc(100% + 5px);left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:6px;max-height:300px;overflow:auto;z-index:70;display:none}
+  .dd-panel.open{display:block}
+  .dd-opt{width:100%;text-align:left;background:none;border:none;border-radius:7px;padding:8px 9px;cursor:pointer;font-size:12.5px;color:var(--ink);display:flex;justify-content:space-between;gap:8px;align-items:center;font-family:inherit}
+  .dd-opt:hover{background:#F2F7FD}
+  .dd-opt.active{background:var(--navy);color:#fff}
+  .dd-opt .c{font-size:10px;color:var(--muted);background:#EEF2F8;border-radius:20px;padding:1px 7px;font-weight:700;flex:0 0 auto}
+  .dd-opt.active .c{background:rgba(255,255,255,.22);color:#fff}
+  .dd-opt.all{font-weight:800;border-bottom:1px solid var(--line);margin-bottom:4px;padding-bottom:9px}
+  /* sell-through bar on the main-panel dashboard */
+  .pbar{height:8px;border-radius:4px;background:#E8EDF5;overflow:hidden;margin-top:12px}
+  .pbar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--gold3))}
+  .side-stats{background:linear-gradient(135deg,var(--navy),var(--navy2));border-radius:12px;padding:12px;margin-bottom:12px;color:#fff}
+  .side-stats h5{margin:0;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--gold3);font-weight:800}
+  .side-stats .scope{font-size:10.5px;color:#9FB6CE;margin:2px 0 9px}
+  .ss-chips{display:flex;gap:6px;margin-bottom:9px}
+  .ss-chip{flex:1;background:rgba(255,255,255,.09);border-radius:7px;padding:6px 4px;text-align:center}
+  .ss-chip .n{font-size:15px;font-weight:800;line-height:1.1}
+  .ss-chip .t{font-size:8.5px;color:#9FB6CE;text-transform:uppercase;letter-spacing:.3px;margin-top:2px}
+  .ss-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:4px 0;font-size:11.5px}
+  .ss-row .l{color:#B9CBE0;white-space:nowrap}
+  .ss-row .v{font-weight:800;font-variant-numeric:tabular-nums;text-align:right}
+  .ss-row .v.g{color:#5EE0A8}.ss-row .v.r{color:#FF9B97}.ss-row .v.gold{color:var(--gold3)}
+  .ss-sep{height:1px;background:rgba(255,255,255,.14);margin:7px 0}
+  .ss-bar{height:5px;border-radius:3px;background:rgba(255,255,255,.15);overflow:hidden;margin-top:7px}
+  .ss-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold2),var(--gold3))}
+  .pkg{margin-bottom:6px}
+  .pkg-btn{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left;background:#F6F9FD;border:1px solid var(--line);border-radius:9px;padding:9px 10px;cursor:pointer;font-size:13px;font-weight:700;color:var(--navy)}
+  .pkg-btn:hover{background:#EDF3FA}
+  .pkg-btn .cnt{background:var(--navy);color:#fff;border-radius:20px;font-size:10.5px;padding:1px 7px;font-weight:700}
+  .pkg-btn .chev{color:var(--muted);font-size:10px}
+  .codes{padding:6px 0 6px 8px;border-left:2px solid var(--line);margin:6px 0 8px 8px;display:flex;flex-direction:column;gap:4px}
+  .code-btn{text-align:left;background:#fff;border:1px solid var(--line);border-radius:8px;padding:7px 9px;cursor:pointer;font-size:12.5px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+  .code-btn:hover{background:#F6F9FD}
+  .code-btn.active{background:var(--navy);border-color:var(--navy);color:#fff}
+  .code-btn.active .sub{color:#B9CBE0}
+  .code-btn .sub{font-size:10.5px;color:var(--muted)}
+  .add-btn{background:#fff;border:1px dashed var(--blue2);color:var(--blue);border-radius:8px;padding:7px 9px;cursor:pointer;font-size:12px;font-weight:700}
+  .add-btn:hover{background:#F2F8FF}
+  .add-pkg{width:100%;margin-top:8px}
+
+  /* Editor */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow2);padding:16px;margin-bottom:16px}
+  .card h3{margin:0 0 3px;font-size:14px;color:var(--navy)}
+  .card .sub{margin:0 0 12px;font-size:11.5px;color:var(--muted)}
+  .ed-head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;border-radius:14px;padding:14px 16px;margin-bottom:16px}
+  .ed-head h2{margin:0;font-size:16px}
+  .ed-head .code{font-size:12.5px;color:var(--gold3);font-weight:700;margin-top:2px}
+  .btn-del{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.3);color:#fff;padding:7px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600}
+  .btn-del:hover{background:rgba(217,83,79,.5)}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+  label.f{display:flex;flex-direction:column;gap:4px}
+  label.f>span{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+  label.f input,label.f select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;color:var(--ink);width:100%}
+  label.f input:focus,label.f select:focus{outline:none;border-color:var(--blue2);box-shadow:0 0 0 3px rgba(59,130,196,.15)}
+  label.f select{font-weight:600;color:var(--navy);cursor:pointer}
+  /* frozen / locked fields */
+  label.f input:disabled,label.f select:disabled{background:#F4F7FB;color:#33465C;border-color:#E8EDF5;cursor:default;opacity:1;-webkit-text-fill-color:#33465C}
+  .ed-actions{display:flex;align-items:center;gap:12px;margin-top:14px;padding-top:13px;border-top:1px solid var(--line);flex-wrap:wrap}
+  .btn-edit{border:none;border-radius:9px;padding:9px 18px;font-weight:700;font-size:12.5px;cursor:pointer;background:var(--navy);color:#fff}
+  .btn-edit:hover{background:var(--navy2)}
+  .btn-edit.done{background:linear-gradient(135deg,var(--gold2),var(--gold));color:var(--navy)}
+  .lock-hint{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:5px}
+  .lock-hint.on{color:var(--green);font-weight:600}
+  .full{background:rgba(31,169,113,.1);border:1px solid rgba(31,169,113,.35);color:#12704a;border-radius:10px;padding:11px 13px;font-size:12.5px;font-weight:600;text-align:center;margin-top:12px}
+  .full.warn{background:rgba(217,83,79,.09);border-color:rgba(217,83,79,.4);color:#96322e}
+
+  /* user chip + role badges */
+  .who{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);border-radius:20px;padding:5px 11px 5px 6px;font-size:12px;color:#fff}
+  .who .av{width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,var(--gold2),var(--gold));color:var(--navy);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:10.5px}
+  .role{font-size:9.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:2px 6px;border-radius:20px}
+  .role.admin{background:rgba(201,162,39,.9);color:var(--navy)}
+  .role.regular{background:rgba(255,255,255,.22);color:#fff}
+  .role.dark{background:var(--navy);color:#fff}
+  .role.dark.admin{background:linear-gradient(135deg,var(--gold2),var(--gold));color:var(--navy)}
+
+  /* settings modal */
+  .ovl{position:fixed;inset:0;background:rgba(11,42,74,.55);backdrop-filter:blur(2px);z-index:100;display:none;align-items:flex-start;justify-content:center;padding:70px 16px 24px;overflow:auto}
+  .ovl.open{display:flex}
+  .modal{background:var(--panel);border-radius:16px;box-shadow:0 24px 60px rgba(11,42,74,.35);width:100%;max-width:640px}
+  .modal-h{background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;border-radius:16px 16px 0 0;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .modal-h h2{margin:0;font-size:16px}
+  .modal-h p{margin:2px 0 0;font-size:11.5px;color:#B9CBE0}
+  .x{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;line-height:1}
+  .x:hover{background:rgba(255,255,255,.25)}
+  .modal-b{padding:18px}
+  .sec{margin-bottom:20px}
+  .sec h4{margin:0 0 3px;font-size:12px;color:var(--navy);text-transform:uppercase;letter-spacing:.4px}
+  .sec p.h{margin:0 0 10px;font-size:11.5px;color:var(--muted)}
+  .u-row{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:7px}
+  .u-row.me{border-color:var(--blue2);background:#F4F9FF}
+  .u-l{display:flex;align-items:center;gap:9px}
+  .u-av{width:28px;height:28px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px}
+  .u-av.admin{background:linear-gradient(135deg,var(--gold2),var(--gold));color:var(--navy)}
+  .u-n{font-weight:700;color:var(--navy);font-size:13px}
+  .u-s{font-size:11px;color:var(--muted)}
+  .u-form{display:grid;grid-template-columns:1fr 140px auto;gap:8px;align-items:end}
+  @media(max-width:560px){ .u-form{grid-template-columns:1fr} }
+  .perm{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .perm table{font-size:12px}
+  .perm thead th{background:#F3F6FB;color:var(--navy);padding:8px 10px;font-size:10.5px}
+  .perm td{padding:7px 10px;border-bottom:1px solid var(--line)}
+  .yes{color:var(--green);font-weight:800}
+  .no{color:var(--red);font-weight:800}
+  .warnbox{background:#FFF6E5;border:1px solid var(--gold3);color:#7a5a10;border-radius:10px;padding:10px 12px;font-size:11.5px;line-height:1.5}
+  .warnbox b{color:#5c4409}
+  label.f small{font-size:10.5px;color:var(--muted)}
+
+  /* Derived tiles */
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+  .tile{background:#F6F9FD;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .tile .t-l{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+  .tile .t-v{font-size:16px;font-weight:800;color:var(--navy);margin-top:3px}
+  .tile.gold .t-v{color:#8a6d0b}
+  .tile.green .t-v{color:var(--green)}
+  .tile.red .t-v{color:var(--red)}
+
+  /* Payments */
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  thead th{background:var(--navy);color:#fff;text-align:left;padding:9px 10px;font-size:11px;font-weight:600;white-space:nowrap}
+  tbody td{padding:8px 10px;border-bottom:1px solid var(--line)}
+  tbody tr:hover{background:#F6F9FD}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .pay-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:8px;align-items:end;margin-top:12px}
+  .pay-form .btn-add{align-self:end}
+  @media(max-width:700px){ .pay-form{grid-template-columns:1fr} }
+  .pay-form input{padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;width:100%}
+  .btn-add{background:var(--navy);color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:700;font-size:12.5px;cursor:pointer;white-space:nowrap}
+  .btn-add:hover{background:var(--navy2)}
+  .btn-x{background:none;border:none;color:var(--red);cursor:pointer;font-weight:800;font-size:14px;padding:2px 6px;border-radius:5px}
+  .btn-x:hover{background:rgba(217,83,79,.12)}
+  .totrow td{background:#F3F6FB;font-weight:800;color:var(--navy);border-top:2px solid var(--line)}
+  .empty{color:var(--muted);text-align:center;padding:18px;font-size:12.5px}
+
+  .blank{background:var(--panel);border:1px dashed var(--line);border-radius:14px;padding:60px 20px;text-align:center;color:var(--muted)}
+  .blank h2{color:var(--navy);margin:0 0 6px;font-size:17px}
+  .note{background:#FBFCFE;border:1px dashed var(--line);border-radius:10px;padding:10px 12px;font-size:11.5px;color:var(--muted);margin-top:10px}
+  .note b{color:var(--navy)}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">₱C</div>
+    <div>
+      <h1>Collectives Back Office</h1>
+      <p>INTL COLLECTIVES · EDIT · UPDATE · PAYMENT LOG</p>
+    </div>
+  </div>
+  <div class="actions">
+    <span class="saved" id="saveStatus"><i class="dot"></i> Saved</span>
+    <button class="btn" onclick="exportCSV()">⤓ Export CSV</button>
+    <button class="btn" onclick="exportPayments()">⤓ Payments CSV</button>
+    <button class="btn admin-only" onclick="document.getElementById('csvInput').click()">⬆ Import CSV</button>
+    <button class="btn danger admin-only" onclick="resetAll()">↺ Reset to file data</button>
+    <span class="who" id="whoChip"></span>
+    <button class="btn gold" onclick="openSettings()">⚙ Settings</button>
+    <input type="file" id="csvInput" accept=".csv" style="display:none" />
+  </div>
+</header>
+
+<div class="app">
+  <aside class="sidebar">
+    <input class="search" id="search" placeholder="Search package or tour code…" />
+    <div class="dd" id="statsDD">
+      <button class="dd-btn" id="statsBtn"></button>
+      <div class="dd-panel" id="statsPanel"></div>
+    </div>
+    <div id="tree"></div>
+    <button class="add-btn add-pkg admin-only" onclick="newPackage()">＋ New Package</button>
+  </aside>
+  <main id="editor"></main>
+</div>
+
+<div class="ovl" id="settingsOvl">
+  <div class="modal" role="dialog" aria-label="Settings">
+    <div class="modal-h">
+      <div><h2>⚙ Settings</h2><p>Users &amp; access control</p></div>
+      <button class="x" onclick="closeSettings()" title="Close">✕</button>
+    </div>
+    <div class="modal-b" id="settingsBody"></div>
+  </div>
+</div>
+
+<script>
+/* ===================== SEED DATA (from COLLECTIVES INITIAL BACK END FILE.xlsx) ===================== */
+const SEED = [
+    {
+        "package":  "6D4N Korea Nami Island",
+        "tourCode":  "JTKR1B1  - A",
+        "travelRaw":  "5/16/2026 - 5/21/2026",
+        "amountPerPax":  31187,
+        "expProfitPerPerson":  4000,
+        "estProfitPerDeparture":  64000,
+        "holdingDate":  "2026-02-12",
+        "totalCost":  514200,
+        "openingPayment":  514200,
+        "slot":  15,
+        "foc":  1,
+        "soldOutDate":  "2026-03-04",
+        "slotSold":  16,
+        "collected":  632192,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "6D4N Korea Nami Island",
+        "tourCode":  "JTKR1B1  - B",
+        "travelRaw":  "9/11/2026 - 9/16/2026",
+        "amountPerPax":  33297,
+        "expProfitPerPerson":  4000,
+        "estProfitPerDeparture":  64000,
+        "holdingDate":  "2026-02-12",
+        "totalCost":  424475.96,
+        "openingPayment":  58560,
+        "slot":  15,
+        "foc":  1,
+        "soldOutDate":  null,
+        "slotSold":  14,
+        "collected":  524989,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "6D4N Korea Nami Island",
+        "tourCode":  "JTKR1B1  - C",
+        "travelRaw":  "10/11/2026 - 10/16/2026",
+        "amountPerPax":  28298,
+        "expProfitPerPerson":  4000,
+        "estProfitPerDeparture":  64000,
+        "holdingDate":  "2026-02-12",
+        "totalCost":  486630.84,
+        "openingPayment":  77206,
+        "slot":  15,
+        "foc":  1,
+        "soldOutDate":  null,
+        "slotSold":  2,
+        "collected":  86998,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "6D4N Korea Nami Island",
+        "tourCode":  "JTKR1B1  - D",
+        "travelRaw":  "11/15/2026 - 11/20/2026",
+        "amountPerPax":  30254,
+        "expProfitPerPerson":  4000,
+        "estProfitPerDeparture":  64000,
+        "holdingDate":  "2026-02-12",
+        "totalCost":  476010.84,
+        "openingPayment":  71590.75,
+        "slot":  15,
+        "foc":  1,
+        "soldOutDate":  null,
+        "slotSold":  15,
+        "collected":  562485,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "6D4N Korea Nami Island",
+        "tourCode":  "JTKR1B1  - E",
+        "travelRaw":  "12/12/2026 - 12/17/2026",
+        "amountPerPax":  31193,
+        "expProfitPerPerson":  4000,
+        "estProfitPerDeparture":  64000,
+        "holdingDate":  "2026-02-12",
+        "totalCost":  476010.84,
+        "openingPayment":  71590.75,
+        "slot":  15,
+        "foc":  1,
+        "soldOutDate":  null,
+        "slotSold":  6,
+        "collected":  224994,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "6D4N Korea Nami Island",
+        "tourCode":  "JTKR1B1  - F",
+        "travelRaw":  "01/19/2027 - 01/24/2027",
+        "amountPerPax":  31963,
+        "expProfitPerPerson":  4000,
+        "estProfitPerDeparture":  128000,
+        "holdingDate":  "2026-07-02",
+        "totalCost":  1010848,
+        "openingPayment":  310000,
+        "slot":  31,
+        "foc":  1,
+        "soldOutDate":  null,
+        "slotSold":  0,
+        "collected":  null,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Da Nang Charter (5J Cebu Pacific)",
+        "tourCode":  "UOV12B2 - A",
+        "travelRaw":  "2/28/2026 - 3/3/2026",
+        "amountPerPax":  20568,
+        "expProfitPerPerson":  2500,
+        "estProfitPerDeparture":  62500,
+        "holdingDate":  "2025-07-07",
+        "totalCost":  514200,
+        "openingPayment":  514200,
+        "slot":  25,
+        "foc":  0,
+        "soldOutDate":  "2025-08-27",
+        "slotSold":  25,
+        "collected":  614675,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Da Nang Charter (5J Cebu Pacific)",
+        "tourCode":  "UOV12B2 - B",
+        "travelRaw":  "3/28/2026 - 3/31/2026",
+        "amountPerPax":  20568,
+        "expProfitPerPerson":  2500,
+        "estProfitPerDeparture":  62500,
+        "holdingDate":  "2025-07-07",
+        "totalCost":  514200,
+        "openingPayment":  514200,
+        "slot":  25,
+        "foc":  0,
+        "soldOutDate":  "2025-11-28",
+        "slotSold":  25,
+        "collected":  624063,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Da Nang Charter (5J Cebu Pacific)",
+        "tourCode":  "UOV12B2 - C",
+        "travelRaw":  "4/25/2026 - 4/28/2026",
+        "amountPerPax":  20568,
+        "expProfitPerPerson":  2500,
+        "estProfitPerDeparture":  62500,
+        "holdingDate":  "2025-07-07",
+        "totalCost":  514200,
+        "openingPayment":  514200,
+        "slot":  25,
+        "foc":  0,
+        "soldOutDate":  "2026-04-05",
+        "slotSold":  25,
+        "collected":  592082,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "5D3N Da Nang Charter (VJ VietJet)",
+        "tourCode":  "UOV24B2 - A",
+        "travelRaw":  "1/14/2026 - 1/17/2026",
+        "amountPerPax":  21984,
+        "expProfitPerPerson":  3500,
+        "estProfitPerDeparture":  87500,
+        "holdingDate":  "2025-10-23",
+        "totalCost":  549600,
+        "openingPayment":  549600,
+        "slot":  25,
+        "foc":  0,
+        "soldOutDate":  "2025-11-25",
+        "slotSold":  25,
+        "collected":  655972,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "5D3N Da Nang Charter (VJ VietJet)",
+        "tourCode":  "UOV24B2 - B",
+        "travelRaw":  "3/4/2026 - 3/7/2026",
+        "amountPerPax":  21984,
+        "expProfitPerPerson":  3500,
+        "estProfitPerDeparture":  87500,
+        "holdingDate":  "2025-10-23",
+        "totalCost":  549600,
+        "openingPayment":  549600,
+        "slot":  25,
+        "foc":  0,
+        "soldOutDate":  "2025-12-16",
+        "slotSold":  25,
+        "collected":  647678,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "5D3N Da Nang Charter (VJ VietJet)",
+        "tourCode":  "UOV24B2 - C",
+        "travelRaw":  "4/22/2026 - 4/25/2026",
+        "amountPerPax":  21984,
+        "expProfitPerPerson":  3500,
+        "estProfitPerDeparture":  87500,
+        "holdingDate":  "2025-10-23",
+        "totalCost":  329760,
+        "openingPayment":  329760,
+        "slot":  25,
+        "foc":  0,
+        "soldOutDate":  "2026-03-05",
+        "slotSold":  15,
+        "collected":  411585,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "5D3N Da Nang Charter (VJ VietJet)",
+        "tourCode":  "UOV24B2 - D",
+        "travelRaw":  "5/27/2026 - 5/30/2026",
+        "amountPerPax":  21984,
+        "expProfitPerPerson":  3500,
+        "estProfitPerDeparture":  87500,
+        "holdingDate":  "2025-10-23",
+        "totalCost":  549600,
+        "openingPayment":  549600,
+        "slot":  25,
+        "foc":  0,
+        "soldOutDate":  "2026-05-21",
+        "slotSold":  25,
+        "collected":  645205,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "5D3N Da Nang Charter (VJ VietJet)",
+        "tourCode":  "UOV24B2 - E",
+        "travelRaw":  "6/10/2026 - 6/13/2026",
+        "amountPerPax":  21984,
+        "expProfitPerPerson":  3500,
+        "estProfitPerDeparture":  87500,
+        "holdingDate":  "2025-10-23",
+        "totalCost":  549600,
+        "openingPayment":  549600,
+        "slot":  25,
+        "foc":  0,
+        "soldOutDate":  "2026-05-01",
+        "slotSold":  25,
+        "collected":  701185.08,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Da Nang Charter (5J Cebu Pacific)",
+        "tourCode":  "UOV15B2 - A",
+        "travelRaw":  "7/18/2026 - 7/21/2026",
+        "amountPerPax":  20568,
+        "expProfitPerPerson":  2500,
+        "estProfitPerDeparture":  40000,
+        "holdingDate":  "2026-01-26",
+        "totalCost":  308520,
+        "openingPayment":  150000,
+        "slot":  16,
+        "foc":  0,
+        "soldOutDate":  null,
+        "slotSold":  15,
+        "collected":  325485,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Da Nang Charter (5J Cebu Pacific)",
+        "tourCode":  "UOV15B2 - B",
+        "travelRaw":  "8/15/2026 - 8/18/2026",
+        "amountPerPax":  20568,
+        "expProfitPerPerson":  2500,
+        "estProfitPerDeparture":  40000,
+        "holdingDate":  "2026-01-26",
+        "totalCost":  308520,
+        "openingPayment":  150000,
+        "slot":  16,
+        "foc":  0,
+        "soldOutDate":  null,
+        "slotSold":  15,
+        "collected":  325485,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Da Nang Charter (5J Cebu Pacific)",
+        "tourCode":  "UOV15B2 - C",
+        "travelRaw":  "9/19/2026 - 9/22/2026",
+        "amountPerPax":  20568,
+        "expProfitPerPerson":  2500,
+        "estProfitPerDeparture":  40000,
+        "holdingDate":  "2026-01-26",
+        "totalCost":  308520,
+        "openingPayment":  150000,
+        "slot":  16,
+        "foc":  0,
+        "soldOutDate":  null,
+        "slotSold":  13,
+        "collected":  282087,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Da Nang Charter (5J Cebu Pacific)",
+        "tourCode":  "UOV15B2 - D",
+        "travelRaw":  "10/24/2026 - 10/27/2026",
+        "amountPerPax":  20568,
+        "expProfitPerPerson":  2500,
+        "estProfitPerDeparture":  40000,
+        "holdingDate":  "2026-01-26",
+        "totalCost":  308520,
+        "openingPayment":  150000,
+        "slot":  16,
+        "foc":  0,
+        "soldOutDate":  null,
+        "slotSold":  15,
+        "collected":  325485,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Da Nang Charter (5J Cebu Pacific)",
+        "tourCode":  "UOV15B2 - E",
+        "travelRaw":  "11/21/2026 - 11/24/2026",
+        "amountPerPax":  20568,
+        "expProfitPerPerson":  2500,
+        "estProfitPerDeparture":  40000,
+        "holdingDate":  "2026-01-26",
+        "totalCost":  308520,
+        "openingPayment":  150000,
+        "slot":  16,
+        "foc":  0,
+        "soldOutDate":  null,
+        "slotSold":  14,
+        "collected":  304686,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Da Nang Charter (5J Cebu Pacific)",
+        "tourCode":  "UOV15B2 - F",
+        "travelRaw":  "12/12/2026 - 12/15/2026",
+        "amountPerPax":  20568,
+        "expProfitPerPerson":  2500,
+        "estProfitPerDeparture":  40000,
+        "holdingDate":  "2026-01-26",
+        "totalCost":  308520,
+        "openingPayment":  150000,
+        "slot":  16,
+        "foc":  0,
+        "soldOutDate":  null,
+        "slotSold":  14,
+        "collected":  303786,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "5D3N Da Nang (VJ VietJet)",
+        "tourCode":  "UOV42B1 - A",
+        "travelRaw":  "11/11/2026 - 11/14/2026",
+        "amountPerPax":  24170,
+        "expProfitPerPerson":  3500,
+        "estProfitPerDeparture":  112000,
+        "holdingDate":  "2026-06-24",
+        "totalCost":  805440,
+        "openingPayment":  151010.4,
+        "slot":  31,
+        "foc":  1,
+        "soldOutDate":  null,
+        "slotSold":  null,
+        "collected":  null,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "5D3N Da Nang (VJ VietJet)",
+        "tourCode":  "UOV42B1 - B",
+        "travelRaw":  "11/18/2026 - 11/21/2026",
+        "amountPerPax":  24170,
+        "expProfitPerPerson":  3500,
+        "estProfitPerDeparture":  52500,
+        "holdingDate":  "2026-06-24",
+        "totalCost":  308520,
+        "openingPayment":  174170,
+        "slot":  15,
+        "foc":  0,
+        "soldOutDate":  null,
+        "slotSold":  0,
+        "collected":  null,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "5D3N Da Nang (VJ VietJet)",
+        "tourCode":  "UOV42B1 - C",
+        "travelRaw":  "12/9/2026 - 12/12/2026",
+        "amountPerPax":  24170,
+        "expProfitPerPerson":  3500,
+        "estProfitPerDeparture":  112000,
+        "holdingDate":  "2026-06-24",
+        "totalCost":  863552,
+        "openingPayment":  151010,
+        "slot":  31,
+        "foc":  1,
+        "soldOutDate":  null,
+        "slotSold":  0,
+        "collected":  null,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Bangkok Blockings",
+        "tourCode":  "SBBK1B2 - A",
+        "travelRaw":  "7/3/2026 - 7/6/2026",
+        "amountPerPax":  21016,
+        "expProfitPerPerson":  3000,
+        "estProfitPerDeparture":  48000,
+        "holdingDate":  "2026-03-24",
+        "totalCost":  311189.92,
+        "openingPayment":  311189.92,
+        "slot":  15,
+        "foc":  1,
+        "soldOutDate":  "2026-05-28",
+        "slotSold":  16,
+        "collected":  349484,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Bangkok Blockings",
+        "tourCode":  "SBBK1B2 - B",
+        "travelRaw":  "7/10/2026 - 7/13/2026",
+        "amountPerPax":  20484,
+        "expProfitPerPerson":  3000,
+        "estProfitPerDeparture":  48000,
+        "holdingDate":  "2026-03-24",
+        "totalCost":  368489.92,
+        "openingPayment":  368489.92,
+        "slot":  15,
+        "foc":  1,
+        "soldOutDate":  "2026-06-16",
+        "slotSold":  16,
+        "collected":  452169,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Bangkok Blockings",
+        "tourCode":  "SBBK1B2 - C",
+        "travelRaw":  "7/17/2026 - 7/20/2026",
+        "amountPerPax":  null,
+        "expProfitPerPerson":  3000,
+        "estProfitPerDeparture":  48000,
+        "holdingDate":  "2026-03-24",
+        "totalCost":  305049.92,
+        "openingPayment":  305049.92,
+        "slot":  15,
+        "foc":  1,
+        "soldOutDate":  "2026-06-26",
+        "slotSold":  16,
+        "collected":  341984,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Bangkok Blockings",
+        "tourCode":  "SBBK1B2 - D",
+        "travelRaw":  "7/24/2026 - 7/27/2026",
+        "amountPerPax":  19417,
+        "expProfitPerPerson":  3000,
+        "estProfitPerDeparture":  48000,
+        "holdingDate":  "2026-03-24",
+        "totalCost":  307239.92,
+        "openingPayment":  61046.98,
+        "slot":  15,
+        "foc":  1,
+        "soldOutDate":  null,
+        "slotSold":  16,
+        "collected":  383984,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Bangkok Blockings",
+        "tourCode":  "SBBK1B2 - E",
+        "travelRaw":  "8/7/2026 - 8/10/2026",
+        "amountPerPax":  null,
+        "expProfitPerPerson":  3000,
+        "estProfitPerDeparture":  48000,
+        "holdingDate":  "2026-03-24",
+        "totalCost":  291239.92,
+        "openingPayment":  65846.98,
+        "slot":  15,
+        "foc":  1,
+        "soldOutDate":  null,
+        "slotSold":  15,
+        "collected":  345276,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Bangkok Blockings",
+        "tourCode":  "SBBK1B2 - F",
+        "travelRaw":  "8/14/2026 - 8/17/2026",
+        "amountPerPax":  19951,
+        "expProfitPerPerson":  3000,
+        "estProfitPerDeparture":  48000,
+        "holdingDate":  "2026-03-24",
+        "totalCost":  299239.92,
+        "openingPayment":  63446.98,
+        "slot":  15,
+        "foc":  1,
+        "soldOutDate":  null,
+        "slotSold":  16,
+        "collected":  354652,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Bangkok Blockings",
+        "tourCode":  "SBBK1B2 - G",
+        "travelRaw":  "11/13/2026 - 11/16/2026",
+        "amountPerPax":  null,
+        "expProfitPerPerson":  3000,
+        "estProfitPerDeparture":  48000,
+        "holdingDate":  "2026-07-06",
+        "totalCost":  195906.56,
+        "openingPayment":  58771.97,
+        "slot":  15,
+        "foc":  1,
+        "soldOutDate":  null,
+        "slotSold":  0,
+        "collected":  null,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Bangkok Blockings",
+        "tourCode":  "SBBK1B2 - H",
+        "travelRaw":  "11/19/2026 - 11/22/2026",
+        "amountPerPax":  null,
+        "expProfitPerPerson":  3000,
+        "estProfitPerDeparture":  48000,
+        "holdingDate":  "2026-07-06",
+        "totalCost":  215458.56,
+        "openingPayment":  0,
+        "slot":  15,
+        "foc":  1,
+        "soldOutDate":  null,
+        "slotSold":  0,
+        "collected":  null,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Bangkok Blockings",
+        "tourCode":  "SBBK1B2 - I",
+        "travelRaw":  "12/11/2026 - 12/14/2026",
+        "amountPerPax":  null,
+        "expProfitPerPerson":  3000,
+        "estProfitPerDeparture":  48000,
+        "holdingDate":  "2026-07-06",
+        "totalCost":  231458.56,
+        "openingPayment":  0,
+        "slot":  15,
+        "foc":  1,
+        "soldOutDate":  null,
+        "slotSold":  0,
+        "collected":  null,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Hong Kong Blockings",
+        "tourCode":  "CNHK1B1 - A",
+        "travelRaw":  "7/3/2026 - 7/6/2026",
+        "amountPerPax":  null,
+        "expProfitPerPerson":  3000,
+        "estProfitPerDeparture":  48000,
+        "holdingDate":  "2026-03-24",
+        "totalCost":  354551.22,
+        "openingPayment":  354551.22,
+        "slot":  15,
+        "foc":  1,
+        "soldOutDate":  "2026-06-24",
+        "slotSold":  16,
+        "collected":  358484,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Hong Kong Blockings",
+        "tourCode":  "CNHK1B1 - B",
+        "travelRaw":  "7/10/2026 - 7/13/2026",
+        "amountPerPax":  null,
+        "expProfitPerPerson":  3000,
+        "estProfitPerDeparture":  48000,
+        "holdingDate":  "2026-03-24",
+        "totalCost":  438371.82,
+        "openingPayment":  438371.82,
+        "slot":  15,
+        "foc":  1,
+        "soldOutDate":  null,
+        "slotSold":  16,
+        "collected":  518825,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Hong Kong Blockings",
+        "tourCode":  "CNHK1B1 - C",
+        "travelRaw":  "7/17/2026 - 7/20/2026",
+        "amountPerPax":  27112.29,
+        "expProfitPerPerson":  3000,
+        "estProfitPerDeparture":  48000,
+        "holdingDate":  "2026-03-24",
+        "totalCost":  439755.62,
+        "openingPayment":  439755.62,
+        "slot":  15,
+        "foc":  1,
+        "soldOutDate":  null,
+        "slotSold":  16,
+        "collected":  542993,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Hong Kong Blockings",
+        "tourCode":  "CNHK1B1 - D",
+        "travelRaw":  "7/24/2026 - 7/27/2026",
+        "amountPerPax":  null,
+        "expProfitPerPerson":  3000,
+        "estProfitPerDeparture":  48000,
+        "holdingDate":  "2026-03-24",
+        "totalCost":  311229.32,
+        "openingPayment":  159084.32,
+        "slot":  15,
+        "foc":  1,
+        "soldOutDate":  "2026-06-30",
+        "slotSold":  6,
+        "collected":  146994,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Hong Kong Blockings",
+        "tourCode":  "CNHK1B1 - E",
+        "travelRaw":  "8/7/2026 - 8/10/2026",
+        "amountPerPax":  null,
+        "expProfitPerPerson":  3000,
+        "estProfitPerDeparture":  48000,
+        "holdingDate":  "2026-03-24",
+        "totalCost":  293629.32,
+        "openingPayment":  141484.32,
+        "slot":  15,
+        "foc":  1,
+        "soldOutDate":  "2026-05-22",
+        "slotSold":  9,
+        "collected":  198491,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Hong Kong Blockings",
+        "tourCode":  "CNHK1B1 - F",
+        "travelRaw":  "8/14/2026 - 8/17/2026",
+        "amountPerPax":  null,
+        "expProfitPerPerson":  3000,
+        "estProfitPerDeparture":  48000,
+        "holdingDate":  "2026-03-24",
+        "totalCost":  293629.32,
+        "openingPayment":  141484.32,
+        "slot":  15,
+        "foc":  1,
+        "soldOutDate":  "2026-06-08",
+        "slotSold":  15,
+        "collected":  333485,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Singapore Blockings",
+        "tourCode":  "TVSG1B1 - A",
+        "travelRaw":  "7/10/2026 - 7/13/2026",
+        "amountPerPax":  26537,
+        "expProfitPerPerson":  3000,
+        "estProfitPerDeparture":  48000,
+        "holdingDate":  "2026-03-24",
+        "totalCost":  444986.84,
+        "openingPayment":  444986.84,
+        "slot":  15,
+        "foc":  1,
+        "soldOutDate":  "2026-06-30",
+        "slotSold":  16,
+        "collected":  451484,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "4D3N Singapore Blockings",
+        "tourCode":  "TVSG1B1 - B",
+        "travelRaw":  "7/24/2026 - 7/27/2026",
+        "amountPerPax":  25149,
+        "expProfitPerPerson":  3000,
+        "estProfitPerDeparture":  48000,
+        "holdingDate":  "2026-03-24",
+        "totalCost":  377227.2,
+        "openingPayment":  272388.81,
+        "slot":  15,
+        "foc":  1,
+        "soldOutDate":  "2026-07-02",
+        "slotSold":  15,
+        "collected":  480985,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "ADORA CRUISE MNL - JAPAN",
+        "tourCode":  "UOAC2B2",
+        "travelRaw":  "12/21/2026 - 12/27/2026",
+        "amountPerPax":  42299.1,
+        "expProfitPerPerson":  3699.9,
+        "estProfitPerDeparture":  103597.2,
+        "holdingDate":  "2026-03-06",
+        "totalCost":  1108676.7,
+        "openingPayment":  213414.32,
+        "slot":  28,
+        "foc":  0,
+        "soldOutDate":  "2026-04-16",
+        "slotSold":  28,
+        "collected":  1287972,
+        "remainingBalanceToCollect":  null
+    },
+    {
+        "package":  "ADORA CRUISE MNL - JAPAN",
+        "tourCode":  "UOAC2B2",
+        "travelRaw":  "12/27/2026 - 01/02/2027",
+        "amountPerPax":  42299.1,
+        "expProfitPerPerson":  3699.9,
+        "estProfitPerDeparture":  59198.4,
+        "holdingDate":  "2026-03-06",
+        "totalCost":  777264.32,
+        "openingPayment":  121939.2,
+        "slot":  16,
+        "foc":  0,
+        "soldOutDate":  "2026-04-09",
+        "slotSold":  16,
+        "collected":  735984,
+        "remainingBalanceToCollect":  null
+    }
+];
+
+const STORAGE_KEY = "gladex_collectives_backoffice_v1";
+const PESO = "₱";
+// Half a centavo. Money is stored as floats, so a fully-settled balance can land on
+// 0.0000000000582 instead of 0 and still *display* as ₱0.00 — compare against this,
+// never against 0, or "no remaining balance" checks silently fail.
+const CENT = 0.005;
+
+/* ============================== helpers ============================== */
+const uid = () => "e" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+const num = (v) => { const n = Number(v); return isFinite(n) ? n : 0; };
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const money = (n) => (n < 0 ? "-" + PESO : PESO) + Math.abs(num(n)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const parseD = (s) => (s ? new Date(s + "T00:00:00") : null);
+const daysBetween = (a, b) => Math.max(0, Math.round((b - a) / 86400000));
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+/* ============================== store ============================== */
+const ADMIN_ID = "u-admin-default";
+function seedDB() {
+  return {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    users: [{ id: ADMIN_ID, name: "Administrator", role: "admin" }],
+    currentUserId: ADMIN_ID,
+    adminPin: "",
+    entries: SEED.map((r) => ({
+      id: uid(),
+      package: r.package || "",
+      tourCode: r.tourCode || "",
+      travelRaw: r.travelRaw || "",
+      holdingDate: r.holdingDate || "",
+      soldOutDate: r.soldOutDate || "",
+      amountPerPax: r.amountPerPax ?? null,
+      expProfitPerPerson: r.expProfitPerPerson ?? null,
+      estProfitPerDeparture: r.estProfitPerDeparture ?? null,
+      totalCost: r.totalCost ?? 0,
+      slot: r.slot ?? 0,
+      foc: r.foc ?? 0,
+      remainingBalanceToCollect: r.remainingBalanceToCollect ?? null,
+      payments:
+        r.openingPayment && num(r.openingPayment) !== 0
+          ? [{ id: uid(), date: r.holdingDate || "", amount: num(r.openingPayment), note: "Opening payment (imported from file)" }]
+          : [],
+      // Slot Sold + Collected are derived from this log. The file's figures are
+      // seeded as one opening entry so totals stay exactly as they are today.
+      sales:
+        num(r.slotSold) !== 0 || num(r.collected) !== 0
+          ? [{ id: uid(), date: r.holdingDate || "", slots: num(r.slotSold), amount: num(r.collected), note: "Opening sale (imported from file)" }]
+          : [],
+    })),
+  };
+}
+/** Bring any stored/imported entry up to the current shape (adds the sales log). */
+function migrateEntry(e) {
+  if (!e || typeof e !== "object") return null;
+  if (!Array.isArray(e.payments)) e.payments = [];
+  if (!Array.isArray(e.sales)) {
+    const slots = num(e.slotSold), amount = num(e.collected);
+    e.sales = slots !== 0 || amount !== 0
+      ? [{ id: uid(), date: e.holdingDate || "", slots, amount, note: "Opening sale (imported from file)" }]
+      : [];
+  }
+  delete e.slotSold; delete e.collected; // now derived from e.sales
+  return e;
+}
+/** Ensure the users/roles block exists and stays coherent (never zero admins). */
+function migrateUsers(d) {
+  if (!Array.isArray(d.users) || !d.users.length) {
+    d.users = [{ id: ADMIN_ID, name: "Administrator", role: "admin" }];
+    d.currentUserId = ADMIN_ID;
+  }
+  d.users.forEach((u) => { if (u.role !== "admin" && u.role !== "regular") u.role = "regular"; });
+  if (!d.users.some((u) => u.role === "admin")) d.users[0].role = "admin"; // never lock everyone out
+  if (!d.users.some((u) => u.id === d.currentUserId)) d.currentUserId = d.users[0].id;
+  if (typeof d.adminPin !== "string") d.adminPin = "";
+  return d;
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (d && Array.isArray(d.entries)) { d.entries = d.entries.map(migrateEntry).filter(Boolean); return migrateUsers(d); }
+    }
+  } catch (e) { console.warn("load failed", e); }
+  return seedDB();
+}
+let DB = load();
+let sel = { id: null, pkg: null, q: "" };
+let editing = false; // Details fields start frozen; the Edit button unlocks them
+
+let saveTimer = null;
+function save() {
+  DB.updatedAt = new Date().toISOString();
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(DB));
+    const el = document.getElementById("saveStatus");
+    el.innerHTML = '<i class="dot" style="background:#E1A128"></i> Saving…';
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => { el.innerHTML = '<i class="dot"></i> Saved'; }, 350);
+  } catch (e) {
+    document.getElementById("saveStatus").innerHTML = '<i class="dot" style="background:#D9534F"></i> Save failed';
+  }
+}
+
+/* ============================== derive ============================== */
+function derive(e) {
+  const totalSlots = num(e.slot) + num(e.foc);
+  const paid = (e.payments || []).reduce((s, p) => s + num(p.amount), 0);
+  const slotSold = (e.sales || []).reduce((s, x) => s + num(x.slots), 0);
+  const collected = (e.sales || []).reduce((s, x) => s + num(x.amount), 0);
+  const balance = num(e.totalCost) - paid;
+  const remaining = totalSlots - slotSold;
+  const profit = collected - paid;
+  const roi = num(e.totalCost) ? (profit / num(e.totalCost)) * 100 : 0;
+  const hold = parseD(e.holdingDate), out = parseD(e.soldOutDate);
+  const daysToSoldOut = hold && out ? daysBetween(hold, out) : null;
+  const sellingDays = daysToSoldOut != null ? Math.max(1, daysToSoldOut) : hold ? Math.max(1, daysBetween(hold, new Date())) : 1;
+  const perDay = slotSold > 0 ? slotSold / sellingDays : 0;
+  return { totalSlots, paid, slotSold, collected, balance, remaining, profit, roi, daysToSoldOut, perDay, perWeek: perDay * 7 };
+}
+const current = () => DB.entries.find((e) => e.id === sel.id) || null;
+const allPackages = () => [...new Set(DB.entries.map((e) => e.package).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+/* ===== users & permissions ===== */
+const currentUser = () => (DB.users || []).find((u) => u.id === DB.currentUserId) || null;
+const isAdmin = () => (currentUser() || {}).role === "admin";
+const initials = (n) => (String(n || "?").trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("") || "?").toUpperCase();
+
+function renderWho() {
+  const u = currentUser();
+  document.getElementById("whoChip").innerHTML = u
+    ? `<span class="av">${esc(initials(u.name))}</span><span>${esc(u.name)}</span><span class="role ${u.role}">${u.role}</span>`
+    : `<span>No user</span>`;
+  // header actions that only admins may use
+  document.querySelectorAll(".admin-only").forEach((el) => { el.style.display = isAdmin() ? "" : "none"; });
+}
+function openSettings() { renderSettings(); document.getElementById("settingsOvl").classList.add("open"); }
+function closeSettings() { document.getElementById("settingsOvl").classList.remove("open"); }
+
+const PERMS = [
+  ["Add payment to supplier", 1, 1], ["Add slots sold / availed", 1, 1], ["Export CSV", 1, 1],
+  ["Edit the frozen Details fields", 1, 0], ["Add / change package", 1, 0], ["Add tour code", 1, 0],
+  ["Delete a payment or sale", 1, 0], ["Delete a tour code", 1, 0],
+  ["Import CSV / Reset to file data", 1, 0], ["Manage users", 1, 0],
+];
+function renderSettings() {
+  const me = currentUser(), admin = isAdmin();
+  const roleBlurb = (r) => r === "admin"
+    ? "Full access — can edit frozen fields, add packages &amp; tour codes"
+    : "Can add payments &amp; slots sold only";
+  document.getElementById("settingsBody").innerHTML = `
+    <div class="sec">
+      <h4>Signed in as</h4>
+      <p class="h">Switch the active user — permissions apply immediately.</p>
+      <div class="u-row me">
+        <div class="u-l">
+          <div class="u-av ${me && me.role === "admin" ? "admin" : ""}">${esc(initials(me ? me.name : "?"))}</div>
+          <div><div class="u-n">${esc(me ? me.name : "(none)")}</div><div class="u-s">${me ? roleBlurb(me.role) : ""}</div></div>
+        </div>
+        <select id="switchUser" style="max-width:230px">
+          ${(DB.users || []).map((u) => `<option value="${esc(u.id)}"${u.id === DB.currentUserId ? " selected" : ""}>${esc(u.name)} — ${u.role}</option>`).join("")}
+        </select>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h4>Users</h4>
+      <p class="h">${admin ? "Add or remove users. There must always be at least one admin." : "Only admins can add or remove users."}</p>
+      ${(DB.users || []).map((u) => `
+        <div class="u-row">
+          <div class="u-l">
+            <div class="u-av ${u.role === "admin" ? "admin" : ""}">${esc(initials(u.name))}</div>
+            <div><div class="u-n">${esc(u.name)}</div><div class="u-s">${roleBlurb(u.role)}</div></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="role dark ${u.role}">${u.role}</span>
+            ${admin ? `<button class="btn-x" data-deluser="${esc(u.id)}" title="Remove user">✕</button>` : ""}
+          </div>
+        </div>`).join("")}
+      ${admin ? `
+      <div class="u-form" style="margin-top:11px">
+        <label class="f"><span>Name</span><input type="text" id="nuName" placeholder="e.g. Maria Santos"></label>
+        <label class="f"><span>Role</span><select id="nuRole"><option value="regular">Regular</option><option value="admin">Admin</option></select></label>
+        <button class="btn-add" data-adduser="1">＋ Add User</button>
+      </div>` : ""}
+    </div>
+
+    <div class="sec">
+      <h4>Permissions</h4>
+      <div class="perm"><table>
+        <thead><tr><th>Action</th><th style="text-align:center">Admin</th><th style="text-align:center">Regular</th></tr></thead>
+        <tbody>${PERMS.map((r) => `<tr><td>${r[0]}</td>
+          <td style="text-align:center" class="${r[1] ? "yes" : "no"}">${r[1] ? "✔" : "✕"}</td>
+          <td style="text-align:center" class="${r[2] ? "yes" : "no"}">${r[2] ? "✔" : "✕"}</td></tr>`).join("")}</tbody>
+      </table></div>
+    </div>
+
+    <div class="sec">
+      <h4>Admin PIN (optional)</h4>
+      <p class="h">${DB.adminPin ? "A PIN is set — switching to an admin user will ask for it." : "No PIN set — anyone can switch to an admin user."}</p>
+      ${admin ? `<div class="u-form">
+        <label class="f"><span>New PIN</span><input type="password" id="pinVal" placeholder="${DB.adminPin ? "•••• (set)" : "not set"}"></label>
+        <button class="btn-add" data-setpin="1">Save PIN</button>
+        <button class="btn-lite" data-clearpin="1">Clear</button>
+      </div>` : `<p class="h">Only admins can change the PIN.</p>`}
+    </div>
+
+    <div class="warnbox">
+      <b>⚠ This is a workflow guardrail, not real security.</b> Everything runs in this browser with no server,
+      so anyone with this file can switch roles here or bypass it with developer tools. It reliably prevents
+      <i>accidents</i> — it cannot stop a determined user. Real enforcement needs the Supabase login.
+    </div>`;
+}
+function switchUser(id) {
+  const u = (DB.users || []).find((x) => x.id === id); if (!u) return;
+  if (u.role === "admin" && DB.adminPin && !isAdmin()) {
+    if (prompt("Enter the admin PIN:") !== DB.adminPin) { alert("Incorrect PIN — user not switched."); renderSettings(); return; }
+  }
+  DB.currentUserId = id; editing = false; save();
+  renderWho(); renderSettings(); renderTree(); renderEditor();
+}
+function addUser() {
+  if (!isAdmin()) return;
+  const name = document.getElementById("nuName").value.trim();
+  const role = document.getElementById("nuRole").value;
+  if (!name) { alert("Enter a user name."); return; }
+  if ((DB.users || []).some((u) => u.name.trim().toLowerCase() === name.toLowerCase())) { alert(`A user named "${name}" already exists.`); return; }
+  DB.users.push({ id: uid(), name, role });
+  save(); renderSettings(); renderWho();
+}
+function deleteUser(id) {
+  if (!isAdmin()) return;
+  const u = (DB.users || []).find((x) => x.id === id); if (!u) return;
+  if (u.id === DB.currentUserId) { alert("You can't remove the user you're signed in as.\n\nSwitch to another user first."); return; }
+  if (u.role === "admin" && DB.users.filter((x) => x.role === "admin").length <= 1) { alert("There must always be at least one admin."); return; }
+  if (!confirm(`Remove user "${u.name}"?`)) return;
+  DB.users = DB.users.filter((x) => x.id !== id);
+  save(); renderSettings(); renderWho();
+}
+function setPin() {
+  if (!isAdmin()) return;
+  const v = document.getElementById("pinVal").value.trim();
+  if (!v) { alert("Enter a PIN."); return; }
+  DB.adminPin = v; save(); renderSettings();
+  alert("Admin PIN saved.\n\nNote: this is stored in plain text in your browser — it's a speed bump, not real security.");
+}
+function clearPin() { if (!isAdmin()) return; DB.adminPin = ""; save(); renderSettings(); }
+
+document.getElementById("settingsBody").addEventListener("click", (ev) => {
+  if (ev.target.closest("[data-adduser]")) return addUser();
+  if (ev.target.closest("[data-setpin]")) return setPin();
+  if (ev.target.closest("[data-clearpin]")) return clearPin();
+  const du = ev.target.closest("[data-deluser]");
+  if (du) return deleteUser(du.dataset.deluser);
+});
+document.getElementById("settingsBody").addEventListener("change", (ev) => {
+  if (ev.target.id === "switchUser") switchUser(ev.target.value);
+});
+document.getElementById("settingsOvl").addEventListener("click", (ev) => {
+  if (ev.target.id === "settingsOvl") closeSettings(); // click the backdrop to close
+});
+
+/* ============================== sidebar ============================== */
+/* ===== dashboard dropdown (sidebar) ===== */
+let statsPkg = null;    // null = nothing picked yet -> dashboard hidden
+let statsOpen = false;  // is the package list popped open?
+
+function renderStatsDD() {
+  const btn = document.getElementById("statsBtn");
+  btn.className = "dd-btn" + (statsOpen ? " open" : "");
+  btn.innerHTML = statsPkg
+    ? `📊 ${esc(statsPkg === "__ALL__" ? "All packages" : statsPkg)}<span class="sub">DASHBOARD — TAP TO CHANGE</span>`
+    : `📊 Dashboard<span class="sub">TAP TO PICK A PACKAGE</span>`;
+  const panel = document.getElementById("statsPanel");
+  panel.className = "dd-panel" + (statsOpen ? " open" : "");
+  panel.innerHTML =
+    `<button class="dd-opt all ${statsPkg === "__ALL__" ? "active" : ""}" data-statpkg="__ALL__">
+       <span>All packages</span><span class="c">${DB.entries.length}</span></button>` +
+    allPackages().map((p) => {
+      const n = DB.entries.filter((e) => e.package === p).length;
+      return `<button class="dd-opt ${statsPkg === p ? "active" : ""}" data-statpkg="${esc(p)}">
+                <span>${esc(p)}</span><span class="c">${n}</span></button>`;
+    }).join("");
+}
+
+/** Full-width dashboard for the package chosen in the dropdown — renders in the MAIN panel. */
+function renderPackageDashboard(host) {
+  const all = statsPkg === "__ALL__";
+  const list = all ? DB.entries : DB.entries.filter((e) => e.package === statsPkg);
+  const t = { cost: 0, paid: 0, bal: 0, coll: 0, profit: 0, slots: 0, sold: 0, rem: 0 };
+  list.forEach((e) => {
+    const d = derive(e);
+    t.cost += num(e.totalCost); t.paid += d.paid; t.bal += d.balance;
+    t.coll += d.collected; t.profit += d.profit;
+    t.slots += d.totalSlots; t.sold += d.slotSold; t.rem += Math.max(0, d.remaining);
+  });
+  const roi = t.cost ? (t.profit / t.cost) * 100 : 0;
+  const sell = t.slots ? (t.sold / t.slots) * 100 : 0;
+  const pkgs = new Set(list.map((e) => e.package).filter(Boolean)).size;
+  const tile = (l, v, c) => `<div class="tile ${c || ""}"><div class="t-l">${l}</div><div class="t-v">${v}</div></div>`;
+  host.innerHTML = `
+    <div class="ed-head">
+      <div><h2>${esc(all ? "All Packages" : statsPkg)}</h2>
+        <div class="code">PACKAGE DASHBOARD &middot; ${list.length} DEPARTURE${list.length === 1 ? "" : "S"}${all ? ` &middot; ${pkgs} PACKAGES` : ""}</div></div>
+    </div>
+
+    <section class="card">
+      <h3>Slots</h3>
+      <p class="sub">Inventory across ${all ? "every package" : "this package"}.</p>
+      <div class="tiles">
+        ${tile("Departures", list.length)}
+        ${tile("Total Slots", t.slots)}
+        ${tile("Slots Sold", t.sold, "green")}
+        ${tile("Remaining", t.rem, t.rem > 0 ? "gold" : "green")}
+        ${tile("Sell-through", sell.toFixed(1) + "%", sell >= 75 ? "green" : "gold")}
+      </div>
+      <div class="pbar"><i style="width:${Math.max(0, Math.min(100, sell)).toFixed(1)}%"></i></div>
+    </section>
+
+    <section class="card">
+      <h3>Money</h3>
+      <p class="sub">Supplier position and what you've collected from pax.</p>
+      <div class="tiles">
+        ${tile("Total Cost", money(t.cost))}
+        ${tile("Paid to Supplier", money(t.paid))}
+        ${tile("Balance Payable", money(t.bal), t.bal >= CENT ? "red" : "green")}
+        ${tile("Collected from Pax", money(t.coll), "gold")}
+        ${tile("Profit", money(t.profit), t.profit >= 0 ? "green" : "red")}
+        ${tile("ROI", roi.toFixed(2) + "%", roi >= 0 ? "green" : "red")}
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Departures</h3>
+      <p class="sub">Click any row to open it.</p>
+      <div style="overflow-x:auto">
+      <table><thead><tr>
+        ${all ? "<th>Package</th>" : ""}<th>Tour Code</th><th>Travel Date</th>
+        <th class="num">Slots</th><th class="num">Sold</th><th class="num">Left</th>
+        <th class="num">Cost</th><th class="num">Paid</th><th class="num">Balance</th>
+        <th class="num">Collected</th><th class="num">Profit</th><th class="num">ROI</th>
+      </tr></thead><tbody>
+        ${list.map((e) => { const d = derive(e); return `<tr data-open="${e.id}" style="cursor:pointer">
+          ${all ? `<td>${esc(e.package || "(no package)")}</td>` : ""}
+          <td><span class="pkg-name">${esc(e.tourCode || "(untitled)")}</span></td>
+          <td>${esc(e.travelRaw || "—")}</td>
+          <td class="num">${d.totalSlots}</td>
+          <td class="num">${d.slotSold}</td>
+          <td class="num">${d.remaining}</td>
+          <td class="num">${money(e.totalCost)}</td>
+          <td class="num">${money(d.paid)}</td>
+          <td class="num ${d.balance >= CENT ? "neg" : "pos"}">${money(d.balance)}</td>
+          <td class="num">${money(d.collected)}</td>
+          <td class="num ${d.profit >= 0 ? "pos" : "neg"}">${money(d.profit)}</td>
+          <td class="num ${d.roi >= 0 ? "" : "neg"}">${d.roi.toFixed(2)}%</td>
+        </tr>`; }).join("") || `<tr><td colspan="12" style="text-align:center;padding:22px;color:var(--muted)">No departures in this package.</td></tr>`}
+      </tbody>
+      <tfoot><tr class="totrow">
+        ${all ? "<td></td>" : ""}<td>TOTAL</td><td>${list.length} dep</td>
+        <td class="num">${t.slots}</td><td class="num">${t.sold}</td><td class="num">${t.rem}</td>
+        <td class="num">${money(t.cost)}</td><td class="num">${money(t.paid)}</td><td class="num">${money(t.bal)}</td>
+        <td class="num">${money(t.coll)}</td><td class="num">${money(t.profit)}</td><td class="num">${roi.toFixed(2)}%</td>
+      </tr></tfoot></table></div>
+    </section>`;
+}
+function packagesOf(entries) {
+  const m = new Map();
+  entries.forEach((e) => { const k = e.package || "(no package)"; if (!m.has(k)) m.set(k, []); m.get(k).push(e); });
+  return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+}
+function renderTree() {
+  const q = sel.q.trim().toLowerCase();
+  const match = (e) => !q || (e.package || "").toLowerCase().includes(q) || (e.tourCode || "").toLowerCase().includes(q);
+  const visible = DB.entries.filter(match);
+  renderStatsDD();
+  const groups = packagesOf(visible);
+  const host = document.getElementById("tree");
+  if (!groups.length) { host.innerHTML = '<div class="empty">No matches.</div>'; return; }
+  host.innerHTML = groups.map(([pkg, list]) => {
+    const open = q ? true : sel.pkg === pkg;
+    const codes = open ? `<div class="codes">${list.map((e) => {
+        const d = derive(e);
+        return `<button class="code-btn ${e.id === sel.id ? "active" : ""}" data-id="${e.id}">
+            <span>${esc(e.tourCode || "(untitled)")}</span>
+            <span class="sub">${d.remaining} left</span></button>`;
+      }).join("")}
+      ${isAdmin() ? `<button class="add-btn" data-newcode="${esc(pkg)}">＋ New Tour Code</button>` : ""}</div>` : "";
+    return `<div class="pkg">
+        <button class="pkg-btn" data-pkg="${esc(pkg)}">
+          <span>${esc(pkg)}</span>
+          <span><span class="cnt">${list.length}</span> <span class="chev">${open ? "▾" : "▸"}</span></span>
+        </button>${codes}</div>`;
+  }).join("");
+}
+
+/* ============================== editor ============================== */
+const F = (label, key, type, val, hint) =>
+  `<label class="f"><span>${label}</span>
+     <input data-field="${key}" type="${type}" ${type === "number" ? 'step="any"' : ""} value="${esc(val ?? "")}" ${editing ? "" : "disabled"}>
+     ${hint ? `<small>${hint}</small>` : ""}</label>`;
+
+function renderEditor() {
+  const e = current();
+  const host = document.getElementById("editor");
+  if (!e) {
+    // no tour code selected -> show the package dashboard if one is picked in the dropdown
+    if (statsPkg) { renderPackageDashboard(host); return; }
+    host.innerHTML = `<div class="blank"><h2>Select a tour code</h2>
+      <p>Use the <b>📊 Dashboard</b> dropdown on the left to see a package overview,<br>or choose a tour code to view and edit its details.</p></div>`;
+    return;
+  }
+  if (!isAdmin()) editing = false; // regular users can never unlock Details
+  const d = derive(e);
+  host.innerHTML = `
+    <div class="ed-head">
+      <div><h2>${esc(e.package || "(no package)")}</h2><div class="code">${esc(e.tourCode || "(untitled)")}</div></div>
+      ${isAdmin() ? `<button class="btn-del" data-del="1">🗑 Delete Entry</button>` : ""}
+    </div>
+
+    <section class="card">
+      <h3>Details</h3>
+      <p class="sub">${editing ? "Fields are unlocked — changes save automatically." : "Fields are frozen. Click Edit Details below to change them."}</p>
+      <div class="grid">
+        <label class="f"><span>Package</span>
+          <select data-field="package" ${editing ? "" : "disabled"}>
+            <option value=""${!e.package ? " selected" : ""}>(no package)</option>
+            ${allPackages().map((p) => `<option value="${esc(p)}"${p === e.package ? " selected" : ""}>${esc(p)}</option>`).join("")}
+            <option value="__new__">＋ New package…</option>
+          </select>
+          <small>Move this tour code to another package</small>
+        </label>
+        ${F("Tour Code", "tourCode", "text", e.tourCode)}
+        ${F("Travel Date", "travelRaw", "text", e.travelRaw, "e.g. 5/16/2026 - 5/21/2026")}
+        ${F("Holding Date", "holdingDate", "date", e.holdingDate)}
+        ${F("Sold Out Date", "soldOutDate", "date", e.soldOutDate, "leave blank if still selling")}
+        ${F("Total Cost", "totalCost", "number", e.totalCost)}
+        ${F("Slot (paid)", "slot", "number", e.slot)}
+        ${F("FOC", "foc", "number", e.foc)}
+        ${F("Amount / Pax (before commi)", "amountPerPax", "number", e.amountPerPax)}
+        ${F("Expected Profit / Person", "expProfitPerPerson", "number", e.expProfitPerPerson)}
+        ${F("Est. Profit / Departure", "estProfitPerDeparture", "number", e.estProfitPerDeparture)}
+        ${F("Remaining Balance to Collect", "remainingBalanceToCollect", "number", e.remainingBalanceToCollect)}
+      </div>
+      <div class="ed-actions">
+        ${isAdmin()
+          ? `<button class="btn-edit ${editing ? "done" : ""}" data-toggleedit="1">${editing ? "✔ Done Editing" : "✎ Edit Details"}</button>
+             <span class="lock-hint ${editing ? "on" : ""}">${editing ? "● Unlocked — click Done when finished" : "🔒 Frozen — Slot Sold &amp; Collected are logged below"}</span>`
+          : `<span class="lock-hint">🔒 Frozen — admin access required to edit these fields. You can still log payments and slots sold below.</span>`}
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Payments to Supplier</h3>
+      <p class="sub">Add each payment as its own entry — Current Payment and Balance Payable update automatically.</p>
+      <div id="payments"></div>
+      ${d.balance >= CENT
+        ? `<div class="pay-form">
+             <label class="f"><span>Date</span><input type="date" id="pDate" value="${todayISO()}"></label>
+             <label class="f"><span>Amount</span><input type="number" step="any" id="pAmount" min="0" max="${d.balance}" placeholder="0.00"><small>${money(d.balance)} remaining</small></label>
+             <label class="f"><span>Note</span><input type="text" id="pNote" placeholder="e.g. 2nd deposit, bank transfer"></label>
+             <button class="btn-add" data-addpay="1">＋ Add Payment</button>
+           </div>`
+        : `<div class="full${d.balance <= -CENT ? " warn" : ""}">${d.balance <= -CENT
+             ? `⚠ Overpaid by ${money(-d.balance)} — there is no remaining balance. Payments are closed.`
+             : `✔ Fully paid — there is no remaining balance to the supplier.`}</div>`}
+    </section>
+
+    <section class="card">
+      <h3>Slots Sold</h3>
+      <p class="sub">Log each sale — Slot Sold, Remaining Slot and Collected from Pax update automatically.</p>
+      <div id="sales"></div>
+      ${d.remaining > 0
+        ? `<div class="pay-form">
+             <label class="f"><span>Date</span><input type="date" id="sDate" value="${todayISO()}"></label>
+             <label class="f"><span>Slots</span><input type="number" id="sSlots" min="1" max="${d.remaining}" step="1" value="1"></label>
+             <label class="f"><span>Amount Collected</span><input type="number" step="any" id="sAmount" placeholder="0.00"></label>
+             <label class="f"><span>Note</span><input type="text" id="sNote" placeholder="e.g. pax name / booking ref"></label>
+             <button class="btn-add" data-addsale="1">＋ Add Sale</button>
+           </div>`
+        : `<div class="full">✔ Fully booked — all ${d.totalSlots} slots sold. No slots available to add.</div>`}
+    </section>
+
+    <section class="card">
+      <h3>Calculated</h3>
+      <p class="sub">Derived from the fields and payment log above — not editable.</p>
+      <div class="tiles" id="derived"></div>
+      <div class="note"><b>Formulas:</b> Total Slots = Slot + FOC · Remaining = Total Slots − Slot Sold ·
+        Current Payment = sum of payments · Balance Payable = Total Cost − Current Payment ·
+        Profit = Collected − Current Payment · ROI = Profit ÷ Total Cost ·
+        Per Day = Slot Sold ÷ selling days (Holding→Sold Out, or Holding→today).</div>
+    </section>`;
+  renderPayments();
+  renderSales();
+  renderDerived();
+}
+
+function renderSales() {
+  const e = current(); if (!e) return;
+  const host = document.getElementById("sales"); if (!host) return;
+  const rows = (e.sales || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const slots = rows.reduce((s, x) => s + num(x.slots), 0);
+  const amount = rows.reduce((s, x) => s + num(x.amount), 0);
+  host.innerHTML = rows.length
+    ? `<table><thead><tr><th>Date</th><th class="num">Slots</th><th class="num">Collected</th><th>Note</th><th></th></tr></thead>
+       <tbody>${rows.map((x) => `<tr>
+            <td>${esc(x.date || "—")}</td>
+            <td class="num">${num(x.slots)}</td>
+            <td class="num">${money(x.amount)}</td>
+            <td>${esc(x.note || "")}</td>
+            <td style="text-align:right">${isAdmin() ? `<button class="btn-x" data-delsale="${x.id}" title="Delete sale">✕</button>` : ""}</td>
+          </tr>`).join("")}</tbody>
+       <tfoot><tr class="totrow"><td>TOTAL (${rows.length})</td><td class="num">${slots}</td><td class="num">${money(amount)}</td><td></td><td></td></tr></tfoot></table>`
+    : `<div class="empty">No sales logged yet. Add the first one below.</div>`;
+}
+
+function renderPayments() {
+  const e = current(); if (!e) return;
+  const rows = (e.payments || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const total = rows.reduce((s, p) => s + num(p.amount), 0);
+  document.getElementById("payments").innerHTML = rows.length
+    ? `<table><thead><tr><th>Date</th><th class="num">Amount</th><th>Note</th><th></th></tr></thead>
+       <tbody>${rows.map((p) => `<tr>
+            <td>${esc(p.date || "—")}</td>
+            <td class="num">${money(p.amount)}</td>
+            <td>${esc(p.note || "")}</td>
+            <td style="text-align:right">${isAdmin() ? `<button class="btn-x" data-delpay="${p.id}" title="Delete payment">✕</button>` : ""}</td>
+          </tr>`).join("")}</tbody>
+       <tfoot><tr class="totrow"><td>TOTAL (${rows.length})</td><td class="num">${money(total)}</td><td></td><td></td></tr></tfoot></table>`
+    : `<div class="empty">No payments logged yet. Add the first one below.</div>`;
+}
+
+function renderDerived() {
+  const e = current(); if (!e) return;
+  const d = derive(e);
+  const tile = (label, val, cls) => `<div class="tile ${cls || ""}"><div class="t-l">${label}</div><div class="t-v">${val}</div></div>`;
+  document.getElementById("derived").innerHTML = [
+    tile("Total Slots", d.totalSlots),
+    tile("Slot Sold", d.slotSold),
+    tile("Remaining Slot", d.remaining, d.remaining < 0 ? "red" : d.remaining > 0 ? "gold" : "green"),
+    tile("Collected from Pax", money(d.collected)),
+    tile("Current Payment", money(d.paid)),
+    tile("Balance Payable", money(d.balance), d.balance > 0 ? "red" : "green"),
+    tile("Profit", money(d.profit), d.profit >= 0 ? "green" : "red"),
+    tile("ROI", d.roi.toFixed(2) + "%", d.roi >= 0 ? "green" : "red"),
+    tile("# Days to Sold Out", d.daysToSoldOut ?? "—"),
+    tile("Per Day", d.perDay.toFixed(2)),
+    tile("Per Week", d.perWeek.toFixed(2)),
+  ].join("");
+}
+
+/* ============================== actions ============================== */
+function selectEntry(id) { sel.id = id; editing = false; const e = current(); if (e) sel.pkg = e.package; renderTree(); renderEditor(); }
+
+const DENY = "You don't have access to this action.\n\nOnly admins can add or change packages, tour codes and the frozen Details fields.\nYou can still log payments to supplier and slots sold.";
+function newEntry(pkg) {
+  if (!isAdmin()) { alert(DENY); return; }
+  const e = { id: uid(), package: pkg || "", tourCode: "", travelRaw: "", holdingDate: "", soldOutDate: "",
+    amountPerPax: null, expProfitPerPerson: null, estProfitPerDeparture: null, totalCost: 0,
+    slot: 0, foc: 0, remainingBalanceToCollect: null, payments: [], sales: [] };
+  DB.entries.push(e); save(); sel.pkg = e.package; selectEntry(e.id);
+  editing = true; renderEditor(); // a new entry starts unlocked — there's nothing to protect yet
+  setTimeout(() => { const i = document.querySelector('[data-field="tourCode"]'); if (i) i.focus(); }, 40);
+}
+function newPackage() {
+  if (!isAdmin()) { alert(DENY); return; }
+  const name = prompt("New package name:");
+  if (!name || !name.trim()) return;
+  newEntry(name.trim());
+}
+function deleteEntry() {
+  if (!isAdmin()) { alert(DENY); return; }
+  const e = current(); if (!e) return;
+  if (!confirm(`Delete "${e.tourCode || "(untitled)"}" from ${e.package}?\n\nThis cannot be undone.`)) return;
+  DB.entries = DB.entries.filter((x) => x.id !== e.id);
+  sel.id = null; save(); renderTree(); renderEditor();
+}
+function addPayment() {
+  const e = current(); if (!e) return;
+  const d = derive(e);
+  // No remaining balance -> warn and do not proceed.
+  if (d.balance < CENT) {
+    alert(d.balance <= -CENT
+      ? `There is no remaining balance — this departure is already OVERPAID by ${money(-d.balance)}.\n\nPayment was not added.`
+      : "There is no remaining balance — this departure is already fully paid to the supplier.\n\nPayment was not added.");
+    return;
+  }
+  const amount = Number(document.getElementById("pAmount").value);
+  if (!isFinite(amount) || amount <= 0) { alert("Enter a payment amount greater than zero."); return; }
+  if (amount > d.balance + CENT) {
+    alert(`Only ${money(d.balance)} remaining on this departure.\n\nYou entered ${money(amount)} — that would overpay the supplier by ${money(amount - d.balance)}.\n\nPayment was not added.`);
+    return;
+  }
+  e.payments = e.payments || [];
+  e.payments.push({ id: uid(), date: document.getElementById("pDate").value || todayISO(),
+    amount, note: document.getElementById("pNote").value.trim() });
+  save();
+  renderEditor(); // re-render: the form freezes once the balance reaches zero
+  renderTree();
+}
+function deletePayment(pid) {
+  if (!isAdmin()) { alert(DENY); return; }
+  const e = current(); if (!e) return;
+  const p = (e.payments || []).find((x) => x.id === pid); if (!p) return;
+  if (!confirm(`Delete payment of ${money(p.amount)} dated ${p.date || "(no date)"}?\n${p.note || ""}\n\nThis cannot be undone.`)) return;
+  e.payments = (e.payments || []).filter((x) => x.id !== pid);
+  save(); renderPayments(); renderDerived(); renderTree();
+}
+function addSale() {
+  const e = current(); if (!e) return;
+  const d = derive(e);
+  const slots = Number(document.getElementById("sSlots").value);
+  const amount = Number(document.getElementById("sAmount").value) || 0;
+  if (!isFinite(slots) || slots <= 0) { alert("Enter how many slots were sold (1 or more)."); return; }
+  if (slots > d.remaining) { alert(`Only ${d.remaining} slot(s) available. Reduce the number of slots.`); return; }
+  if (!isFinite(amount) || amount < 0) { alert("Amount collected can't be negative."); return; }
+  e.sales = e.sales || [];
+  e.sales.push({ id: uid(), date: document.getElementById("sDate").value || todayISO(),
+    slots: Math.round(slots), amount, note: document.getElementById("sNote").value.trim() });
+  save();
+  renderEditor(); // re-render: the form's max / fully-booked state depends on remaining
+  renderTree();
+}
+function deleteSale(sid) {
+  if (!isAdmin()) { alert(DENY); return; }
+  const e = current(); if (!e) return;
+  const x = (e.sales || []).find((s) => s.id === sid); if (!x) return;
+  if (!confirm(`Delete sale of ${num(x.slots)} slot(s) / ${money(x.amount)} dated ${x.date || "(no date)"}?\n${x.note || ""}\n\nThis cannot be undone.`)) return;
+  e.sales = (e.sales || []).filter((s) => s.id !== sid);
+  save(); renderEditor(); renderTree();
+}
+function resetAll() {
+  if (!isAdmin()) { alert(DENY); return; }
+  if (!confirm("Discard ALL your edits and reload the original data from the uploaded file?\n\nThis cannot be undone.")) return;
+  DB = seedDB(); sel = { id: null, pkg: null, q: "" };
+  document.getElementById("search").value = "";
+  save(); renderTree(); renderEditor();
+}
+
+/* ============================== CSV ============================== */
+const cell = (v) => { v = v == null ? "" : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+function dl(fn, content) {
+  const b = new Blob([content], { type: "text/csv;charset=utf-8;" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = fn; a.click(); URL.revokeObjectURL(a.href);
+}
+function exportCSV() {
+  const head = ["PACKAGE","TOUR CODE","TRAVEL DATE","AMOUNT PER PAX BEFORE COMMI","EXPECTED PROFIT / person","ESTIMATED PROFIT PER DEPARTURE","HOLDING DATE","TOTAL COST","CURRENT PAYMENT TO SUPPLIER","BALANCE PAYABLE TO SUPPLIER","SLOT","FOC","TOTAL SLOTS","SOLD OUT DATE","#OF DAYS TO SOLD OUT","SLOT SOLD","REMAINING SLOT","COLLECTED FROM PAX","REMAINING BALANCE TO COLLECT","PROFIT","ROI","PER DAY","PER WEEK"];
+  const lines = DB.entries.map((e) => { const d = derive(e);
+    return [e.package,e.tourCode,e.travelRaw,e.amountPerPax,e.expProfitPerPerson,e.estProfitPerDeparture,e.holdingDate,
+      num(e.totalCost).toFixed(2), d.paid.toFixed(2), d.balance.toFixed(2), e.slot, e.foc, d.totalSlots, e.soldOutDate,
+      d.daysToSoldOut ?? "", d.slotSold, d.remaining, d.collected.toFixed(2), e.remainingBalanceToCollect ?? "",
+      d.profit.toFixed(2), d.roi.toFixed(2) + "%", d.perDay.toFixed(2), d.perWeek.toFixed(2)].map(cell).join(",");
+  });
+  dl("collectives-backend-export.csv", [head.join(","), ...lines].join("\n"));
+}
+function exportPayments() {
+  const head = ["PACKAGE","TOUR CODE","PAYMENT DATE","AMOUNT","NOTE"];
+  const lines = [];
+  DB.entries.forEach((e) => (e.payments || []).forEach((p) =>
+    lines.push([e.package, e.tourCode, p.date, num(p.amount).toFixed(2), p.note].map(cell).join(","))));
+  dl("collectives-payments-export.csv", [head.join(","), ...lines].join("\n"));
+}
+function parseCSV(t) {
+  const rows = []; let cur = [], val = "", q = false;
+  for (let i = 0; i < t.length; i++) { const c = t[i];
+    if (q) { if (c === '"') { if (t[i + 1] === '"') { val += '"'; i++; } else q = false; } else val += c; }
+    else { if (c === '"') q = true; else if (c === ",") { cur.push(val); val = ""; }
+      else if (c === "\n") { cur.push(val); rows.push(cur); cur = []; val = ""; } else if (c !== "\r") val += c; } }
+  if (val !== "" || cur.length) { cur.push(val); rows.push(cur); }
+  return rows.filter((r) => r.some((c) => c.trim() !== ""));
+}
+const toNum = (s) => { s = String(s ?? "").replace(/[₱",%\s]/g, "").trim(); if (s === "") return null; const v = parseFloat(s); return isNaN(v) ? null : v; };
+const toDate = (s) => { s = String(s ?? "").trim(); if (!s) return "";
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if (m) { let y = m[3]; if (y.length === 2) y = "20" + y; return `${y}-${String(m[1]).padStart(2, "0")}-${String(m[2]).padStart(2, "0")}`; }
+  return ""; };
+function importCSV(text) {
+  if (!isAdmin()) { alert(DENY); return; }
+  const rows = parseCSV(text); if (rows.length < 2) { alert("CSV appears empty."); return; }
+  const head = rows[0].map((h) => h.trim().toLowerCase());
+  const idx = (names) => { for (const n of names) { const i = head.indexOf(n); if (i >= 0) return i; } return -1; };
+  const iPkg = idx(["package"]), iCode = idx(["tour code"]), iTrav = idx(["travel date"]),
+    iAmt = idx(["amount per pax before commi"]), iEpp = idx(["expected profit / person"]),
+    iEpd = idx(["estimated profit per departure"]), iHold = idx(["holding date"]),
+    iCost = idx(["total cost"]), iPay = idx(["current payment to supplier"]),
+    iSlot = idx(["slot"]), iFoc = idx(["foc"]), iOut = idx(["sold out date"]),
+    iSold = idx(["slot sold"]), iColl = idx(["collected from pax"]), iRem = idx(["remaining balance to collect"]);
+  if (iPkg < 0 || iSlot < 0) { alert("CSV needs at least PACKAGE and SLOT columns."); return; }
+  const g = (row, i) => (i >= 0 ? (row[i] || "").trim() : "");
+  const out = [];
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r]; const pkg = g(row, iPkg); if (!pkg) continue;
+    const open = toNum(g(row, iPay));
+    const hold = toDate(g(row, iHold));
+    const sold = toNum(g(row, iSold)) ?? 0;
+    const coll = toNum(g(row, iColl)) ?? 0;
+    out.push({ id: uid(), package: pkg, tourCode: g(row, iCode), travelRaw: g(row, iTrav), holdingDate: hold,
+      soldOutDate: toDate(g(row, iOut)), amountPerPax: toNum(g(row, iAmt)), expProfitPerPerson: toNum(g(row, iEpp)),
+      estProfitPerDeparture: toNum(g(row, iEpd)), totalCost: toNum(g(row, iCost)) ?? 0,
+      slot: toNum(g(row, iSlot)) ?? 0, foc: toNum(g(row, iFoc)) ?? 0,
+      remainingBalanceToCollect: toNum(g(row, iRem)),
+      payments: open ? [{ id: uid(), date: hold, amount: open, note: "Opening payment (imported)" }] : [],
+      sales: (sold !== 0 || coll !== 0) ? [{ id: uid(), date: hold, slots: sold, amount: coll, note: "Opening sale (imported)" }] : [] });
+  }
+  if (!out.length) { alert("No valid rows found."); return; }
+  if (!confirm(`Replace all current data with ${out.length} rows from this CSV?`)) return;
+  DB = { version: 1, updatedAt: new Date().toISOString(), entries: out };
+  sel = { id: null, pkg: null, q: "" };
+  save(); renderTree(); renderEditor();
+  alert("Imported " + out.length + " entries.");
+}
+document.getElementById("csvInput").addEventListener("change", (ev) => {
+  const f = ev.target.files[0]; if (!f) return;
+  const rd = new FileReader(); rd.onload = (x) => importCSV(x.target.result); rd.readAsText(f); ev.target.value = "";
+});
+
+/* ============================== events ============================== */
+document.getElementById("tree").addEventListener("click", (ev) => {
+  const pkgBtn = ev.target.closest("[data-pkg]");
+  if (pkgBtn) { const p = pkgBtn.dataset.pkg; sel.pkg = sel.pkg === p ? null : p; renderTree(); return; }
+  const codeBtn = ev.target.closest("[data-id]");
+  if (codeBtn) { selectEntry(codeBtn.dataset.id); return; }
+  const addBtn = ev.target.closest("[data-newcode]");
+  if (addBtn) { newEntry(addBtn.dataset.newcode); return; }
+});
+document.getElementById("editor").addEventListener("input", (ev) => {
+  if (ev.target.tagName === "SELECT") return; // dropdowns handled by the change listener below
+  const key = ev.target.dataset.field; if (!key) return;
+  if (!isAdmin()) return; // fields are disabled for regular users; this is the backstop
+  const e = current(); if (!e) return;
+  e[key] = ev.target.type === "number" ? (ev.target.value === "" ? null : Number(ev.target.value)) : ev.target.value;
+  save(); renderDerived();
+  if (key === "package" || key === "tourCode") {
+    if (key === "package") sel.pkg = e.package;
+    document.querySelector(".ed-head h2").textContent = e.package || "(no package)";
+    document.querySelector(".ed-head .code").textContent = e.tourCode || "(untitled)";
+    renderTree();
+  }
+});
+document.getElementById("editor").addEventListener("change", (ev) => {
+  if (ev.target.tagName !== "SELECT") return;
+  if (ev.target.dataset.field !== "package") return;
+  if (!isAdmin()) { alert(DENY); return; }
+  const e = current(); if (!e) return;
+  const v = ev.target.value;
+  if (v === "__new__") {
+    const name = prompt("New package name:");
+    if (name && name.trim()) e.package = name.trim();
+    // if cancelled, re-rendering below restores the previous selection
+  } else {
+    e.package = v;
+  }
+  save(); sel.pkg = e.package; renderTree(); renderEditor();
+});
+document.getElementById("editor").addEventListener("click", (ev) => {
+  const open = ev.target.closest("[data-open]");            // dashboard table row -> open that departure
+  if (open) return selectEntry(open.dataset.open);
+  if (ev.target.closest("[data-toggleedit]")) {
+    if (!isAdmin()) { alert(DENY); return; }
+    editing = !editing; renderEditor(); return;
+  }
+  if (ev.target.closest("[data-addpay]")) return addPayment();
+  if (ev.target.closest("[data-addsale]")) return addSale();
+  const dp = ev.target.closest("[data-delpay]");
+  if (dp) return deletePayment(dp.dataset.delpay);
+  const ds = ev.target.closest("[data-delsale]");
+  if (ds) return deleteSale(ds.dataset.delsale);
+  if (ev.target.closest("[data-del]")) return deleteEntry();
+});
+document.getElementById("search").addEventListener("input", (ev) => { sel.q = ev.target.value; renderTree(); });
+
+/* dashboard dropdown: button toggles the package list; picking one shows its dashboard */
+document.getElementById("statsBtn").addEventListener("click", (ev) => {
+  ev.stopPropagation(); statsOpen = !statsOpen; renderStatsDD();
+});
+document.getElementById("statsPanel").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-statpkg]"); if (!b) return;
+  ev.stopPropagation();
+  statsPkg = b.dataset.statpkg; statsOpen = false;
+  sel.id = null; editing = false;              // drop the tour code so the dashboard takes the main panel
+  if (statsPkg !== "__ALL__") sel.pkg = statsPkg; // expand that package in the tree too
+  renderStatsDD(); renderTree(); renderEditor();
+});
+document.addEventListener("click", () => { if (statsOpen) { statsOpen = false; renderStatsDD(); } });
+
+/* ============================== boot ============================== */
+renderWho();
+renderTree();
+renderEditor();
+console.log("[back office] entries:", DB.entries.length);
+</script>
+</body>
+</html>

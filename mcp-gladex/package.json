@@ -1,0 +1,22 @@
+{
+  "name": "mcp-gladex",
+  "version": "1.0.0",
+  "description": "MCP server exposing the Gladex Supabase database to Claude (Node.js, @modelcontextprotocol/sdk, PostgREST).",
+  "type": "module",
+  "main": "server.js",
+  "bin": {
+    "mcp-gladex": "server.js"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "inspect": "npx @modelcontextprotocol/inspector node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.11.0",
+    "dotenv": "^16.4.5",
+    "zod": "^3.23.8"
+  }
+}
