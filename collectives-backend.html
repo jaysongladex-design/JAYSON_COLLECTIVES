@@ -170,6 +170,74 @@
   .no{color:var(--red);font-weight:800}
   .warnbox{background:#FFF6E5;border:1px solid var(--gold3);color:#7a5a10;border-radius:10px;padding:10px 12px;font-size:11.5px;line-height:1.5}
   .warnbox b{color:#5c4409}
+
+  /* login gate */
+  .gate{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;
+        background:linear-gradient(135deg,var(--navy),#0a1f38 60%,#123c69)}
+  .gate.hidden{display:none}
+  .gate-card{background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.4);width:100%;max-width:400px;padding:26px}
+  .gate-logo{width:52px;height:52px;border-radius:13px;background:linear-gradient(135deg,var(--gold2),var(--gold));
+             display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--navy);font-size:19px;margin:0 auto 14px}
+  .gate-card h2{margin:0;text-align:center;font-size:18px;color:var(--navy)}
+  .gate-card .g-sub{text-align:center;font-size:12px;color:var(--muted);margin:4px 0 18px}
+  .gate-card label.f{margin-bottom:11px}
+  .gate-btn{width:100%;background:var(--navy);color:#fff;border:none;border-radius:9px;padding:11px;font-weight:800;
+            font-size:13.5px;cursor:pointer;font-family:inherit;margin-top:4px}
+  .gate-btn:hover{background:var(--navy2)}
+  .gate-err{background:rgba(217,83,79,.1);border:1px solid rgba(217,83,79,.4);color:#96322e;border-radius:8px;
+            padding:8px 10px;font-size:12px;font-weight:600;margin-bottom:12px;display:none}
+  .gate-err.show{display:block}
+  .gate-note{margin-top:14px;font-size:10.5px;color:var(--muted);line-height:1.5;border-top:1px solid var(--line);padding-top:11px}
+
+  /* per-user settings menu (replaces the old X) */
+  .umenu-wrap{position:relative}
+  .btn-gear{background:#fff;border:1px solid var(--line);border-radius:7px;width:28px;height:28px;cursor:pointer;
+            font-size:13px;line-height:1;color:var(--muted);font-family:inherit}
+  .btn-gear:hover{background:var(--bg);color:var(--navy)}
+  .umenu{position:absolute;right:0;top:calc(100% + 4px);background:#fff;border:1px solid var(--line);border-radius:10px;
+         box-shadow:var(--shadow);padding:5px;min-width:180px;z-index:80;display:none}
+  .umenu.open{display:block}
+  .umenu button{width:100%;text-align:left;background:none;border:none;border-radius:6px;padding:8px 10px;cursor:pointer;
+                font-size:12.5px;color:var(--ink);font-family:inherit;display:flex;gap:8px;align-items:center}
+  .umenu button:hover{background:#F2F7FD}
+  .umenu button.danger{color:var(--red)}
+  .umenu button.danger:hover{background:rgba(217,83,79,.1)}
+  .umenu .sep{height:1px;background:var(--line);margin:4px 0}
+
+  /* per-user settings menu (replaces the bare ✕) */
+  .u-gear{background:#F3F6FB;border:1px solid var(--line);color:var(--navy);width:30px;height:30px;border-radius:8px;
+          cursor:pointer;font-size:13px;line-height:1;font-family:inherit}
+  .u-gear:hover{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .u-menu{border:1px solid var(--blue2);border-top:none;border-radius:0 0 10px 10px;background:#F8FBFF;
+          padding:12px;margin:-8px 0 8px;display:grid;gap:10px}
+  .u-menu h6{margin:0;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:800}
+  .u-line{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}
+  .u-danger{background:rgba(217,83,79,.1);border:1px solid rgba(217,83,79,.4);color:#96322e;border-radius:8px;
+            padding:8px 12px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit}
+  .u-danger:hover{background:var(--red);color:#fff}
+  .u-row.open{border-color:var(--blue2);border-bottom:none;border-radius:10px 10px 0 0;background:#F8FBFF}
+
+  /* login gate */
+  .gate{position:fixed;inset:0;background:linear-gradient(135deg,var(--navy),#0a1f38 60%,#123c69);z-index:200;
+        display:flex;align-items:center;justify-content:center;padding:20px}
+  .gate.hide{display:none}
+  .gate-box{background:#fff;border-radius:18px;box-shadow:0 30px 70px rgba(0,0,0,.4);width:100%;max-width:400px;overflow:hidden}
+  .gate-h{background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;padding:22px;text-align:center}
+  .gate-h .logo{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,var(--gold2),var(--gold));
+                display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--navy);font-size:20px;margin:0 auto 10px}
+  .gate-h h2{margin:0;font-size:17px}
+  .gate-h p{margin:3px 0 0;font-size:11.5px;color:#B9CBE0;letter-spacing:.4px}
+  .gate-b{padding:20px;display:grid;gap:12px}
+  .gate-b input{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:9px;font-size:14px;font-family:inherit}
+  .gate-b input:focus{outline:none;border-color:var(--blue2);box-shadow:0 0 0 3px rgba(59,130,196,.15)}
+  .gate-b label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px}
+  .gate-btn{background:linear-gradient(135deg,var(--gold2),var(--gold));color:var(--navy);border:none;border-radius:9px;
+            padding:12px;font-weight:800;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .gate-btn:hover{filter:brightness(1.07)}
+  .gate-err{background:rgba(217,83,79,.1);border:1px solid rgba(217,83,79,.4);color:#96322e;border-radius:8px;
+            padding:9px 11px;font-size:12px;font-weight:600;display:none}
+  .gate-err.show{display:block}
+  .gate-note{font-size:10.5px;color:var(--muted);text-align:center;line-height:1.5}
   label.f small{font-size:10.5px;color:var(--muted)}
 
   /* Derived tiles */
@@ -205,6 +273,7 @@
 </style>
 </head>
 <body>
+<div class="gate" id="authGate"><div class="gate-card" id="authCard"></div></div>
 <header class="topbar">
   <div class="brand">
     <div class="logo">₱C</div>
@@ -221,6 +290,7 @@
     <button class="btn danger admin-only" onclick="resetAll()">↺ Reset to file data</button>
     <span class="who" id="whoChip"></span>
     <button class="btn gold" onclick="openSettings()">⚙ Settings</button>
+    <button class="btn" onclick="signOut()" title="Sign out">⎋ Sign out</button>
     <input type="file" id="csvInput" accept=".csv" style="display:none" />
   </div>
 </header>
@@ -1125,6 +1195,33 @@ function derive(e) {
 const current = () => DB.entries.find((e) => e.id === sel.id) || null;
 const allPackages = () => [...new Set(DB.entries.map((e) => e.package).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 
+/* ===== credentials =====
+ * Passwords are hashed (SHA-256 + per-user salt) so the literal password is never
+ * stored — staff reuse passwords elsewhere. This is NOT real security: everything
+ * lives in this browser, so a determined user can bypass it. Supabase Auth is the
+ * real fix. This stops casual/accidental access on a shared PC.
+ */
+const SESSION_KEY = "gladex_session_v1";
+const makeSalt = () => {
+  const a = new Uint8Array(16);
+  (window.crypto || {}).getRandomValues ? crypto.getRandomValues(a) : a.forEach((_, i) => (a[i] = Math.floor(Math.random() * 256)));
+  return [...a].map((b) => b.toString(16).padStart(2, "0")).join("");
+};
+async function hashPw(pw, salt) {
+  const data = new TextEncoder().encode(salt + "::" + pw);
+  if (window.crypto && crypto.subtle && crypto.subtle.digest) {
+    const buf = await crypto.subtle.digest("SHA-256", data);
+    return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+  // fallback if crypto.subtle is unavailable (non-secure context) — weaker, still not plaintext
+  let h1 = 0x811c9dc5, h2 = 0x01000193;
+  for (const b of data) { h1 = (h1 ^ b) >>> 0; h1 = Math.imul(h1, 16777619) >>> 0; h2 = (Math.imul(h2 ^ b, 2246822519) + 1) >>> 0; }
+  return "fnv" + h1.toString(16).padStart(8, "0") + h2.toString(16).padStart(8, "0");
+}
+const hasCreds = (u) => !!(u && u.username && u.passHash && u.salt);
+const needsSetup = () => !(DB.users || []).some((u) => u.role === "admin" && hasCreds(u));
+const findByUsername = (n) => (DB.users || []).find((u) => (u.username || "").toLowerCase() === String(n || "").trim().toLowerCase());
+
 /* ===== users & permissions ===== */
 const currentUser = () => (DB.users || []).find((u) => u.id === DB.currentUserId) || null;
 const isAdmin = () => (currentUser() || {}).role === "admin";
@@ -1138,6 +1235,96 @@ function renderWho() {
   // header actions that only admins may use
   document.querySelectorAll(".admin-only").forEach((el) => { el.style.display = isAdmin() ? "" : "none"; });
 }
+/* ===== login gate ===== */
+const gateNote = `<div class="gate-note"><b>Note:</b> this sign-in runs entirely in this browser — it prevents
+  accidental access on a shared PC, but it is not real security. Anyone with this file and developer tools can
+  bypass it. Passwords are hashed, never stored as text.</div>`;
+
+function renderGate() {
+  const gate = document.getElementById("authGate");
+  const card = document.getElementById("authCard");
+  gate.classList.remove("hidden");
+  if (needsSetup()) {
+    card.innerHTML = `
+      <div class="gate-logo">₱C</div>
+      <h2>Create the admin account</h2>
+      <div class="g-sub">First run — this account creates everyone else's logins.</div>
+      <div class="gate-err" id="gErr"></div>
+      <label class="f"><span>Full name</span><input type="text" id="sName" placeholder="e.g. Jayson" autocomplete="off"></label>
+      <label class="f"><span>Username</span><input type="text" id="sUser" placeholder="e.g. admin" autocomplete="off"></label>
+      <label class="f"><span>Password</span><input type="password" id="sPw" placeholder="at least 6 characters"></label>
+      <label class="f"><span>Confirm password</span><input type="password" id="sPw2"></label>
+      <button class="gate-btn" data-setup="1">Create admin &amp; open the app</button>
+      ${gateNote}`;
+  } else {
+    card.innerHTML = `
+      <div class="gate-logo">₱C</div>
+      <h2>Collectives Back Office</h2>
+      <div class="g-sub">Sign in to continue</div>
+      <div class="gate-err" id="gErr"></div>
+      <label class="f"><span>Username</span><input type="text" id="lUser" autocomplete="username"></label>
+      <label class="f"><span>Password</span><input type="password" id="lPw" autocomplete="current-password"></label>
+      <button class="gate-btn" data-login="1">Sign in</button>
+      ${gateNote}`;
+    setTimeout(() => { const i = document.getElementById("lUser"); if (i) i.focus(); }, 40);
+  }
+}
+const gateErr = (m) => { const el = document.getElementById("gErr"); if (el) { el.textContent = m; el.classList.add("show"); } };
+
+async function doSetup() {
+  const name = document.getElementById("sName").value.trim();
+  const un = document.getElementById("sUser").value.trim();
+  const pw = document.getElementById("sPw").value;
+  const pw2 = document.getElementById("sPw2").value;
+  if (!name) return gateErr("Enter your full name.");
+  if (!un) return gateErr("Enter a username.");
+  if (pw.length < 6) return gateErr("Password must be at least 6 characters.");
+  if (pw !== pw2) return gateErr("The two passwords don't match.");
+  const salt = makeSalt();
+  const passHash = await hashPw(pw, salt);
+  let admin = (DB.users || []).find((u) => u.role === "admin");
+  if (!admin) { admin = { id: uid(), role: "admin" }; DB.users.push(admin); }
+  admin.name = name; admin.username = un; admin.salt = salt; admin.passHash = passHash;
+  DB.currentUserId = admin.id;
+  save();
+  try { sessionStorage.setItem(SESSION_KEY, admin.id); } catch (e) {}
+  openApp();
+}
+async function doLogin() {
+  const un = document.getElementById("lUser").value.trim();
+  const pw = document.getElementById("lPw").value;
+  if (!un || !pw) return gateErr("Enter your username and password.");
+  const u = findByUsername(un);
+  // same message either way, so it can't be used to discover valid usernames
+  if (!u || !hasCreds(u)) return gateErr("Incorrect username or password.");
+  const h = await hashPw(pw, u.salt);
+  if (h !== u.passHash) return gateErr("Incorrect username or password.");
+  DB.currentUserId = u.id; save();
+  try { sessionStorage.setItem(SESSION_KEY, u.id); } catch (e) {}
+  openApp();
+}
+function openApp() {
+  document.getElementById("authGate").classList.add("hidden");
+  editing = false;
+  renderWho(); renderTree(); renderEditor();
+}
+function signOut() {
+  try { sessionStorage.removeItem(SESSION_KEY); } catch (e) {}
+  closeSettings();
+  document.getElementById("editor").innerHTML = ""; // don't leave data on screen behind the gate
+  document.getElementById("tree").innerHTML = "";
+  sel = { id: null, pkg: null, q: "" }; statsPkg = null;
+  renderGate();
+}
+document.getElementById("authCard").addEventListener("click", (ev) => {
+  if (ev.target.closest("[data-setup]")) return doSetup();
+  if (ev.target.closest("[data-login]")) return doLogin();
+});
+document.getElementById("authCard").addEventListener("keydown", (ev) => {
+  if (ev.key !== "Enter") return;
+  if (document.getElementById("sPw2")) doSetup(); else doLogin();
+});
+
 function openSettings() { renderSettings(); document.getElementById("settingsOvl").classList.add("open"); }
 function closeSettings() { document.getElementById("settingsOvl").classList.remove("open"); }
 
@@ -1171,21 +1358,31 @@ function renderSettings() {
       <h4>Users</h4>
       <p class="h">${admin ? "Add or remove users. There must always be at least one admin." : "Only admins can add or remove users."}</p>
       ${(DB.users || []).map((u) => `
-        <div class="u-row">
+        <div class="u-row${u.id === DB.currentUserId ? " me" : ""}">
           <div class="u-l">
             <div class="u-av ${u.role === "admin" ? "admin" : ""}">${esc(initials(u.name))}</div>
-            <div><div class="u-n">${esc(u.name)}</div><div class="u-s">${roleBlurb(u.role)}</div></div>
+            <div><div class="u-n">${esc(u.name)}${u.id === DB.currentUserId ? " (you)" : ""}</div>
+              <div class="u-s">${u.username ? "@" + esc(u.username) : "<i>no login yet</i>"} &middot; ${roleBlurb(u.role)}</div></div>
           </div>
           <div style="display:flex;align-items:center;gap:8px">
             <span class="role dark ${u.role}">${u.role}</span>
-            ${admin ? `<button class="btn-x" data-deluser="${esc(u.id)}" title="Remove user">✕</button>` : ""}
+            ${admin ? `<span class="umenu-wrap">
+              <button class="btn-gear" data-umenu="${esc(u.id)}" title="User settings">⚙</button>
+              <div class="umenu" id="um-${esc(u.id)}">
+                <button data-uaccess="${esc(u.id)}">🔑 Change access (${u.role === "admin" ? "make Regular" : "make Admin"})</button>
+                <button data-upass="${esc(u.id)}">🔒 Change password</button>
+                <div class="sep"></div>
+                <button class="danger" data-deluser="${esc(u.id)}">🗑 Delete user</button>
+              </div></span>` : ""}
           </div>
         </div>`).join("")}
       ${admin ? `
-      <div class="u-form" style="margin-top:11px">
-        <label class="f"><span>Name</span><input type="text" id="nuName" placeholder="e.g. Maria Santos"></label>
+      <div class="u-form" style="margin-top:11px;grid-template-columns:1fr 1fr">
+        <label class="f"><span>Full name</span><input type="text" id="nuName" placeholder="e.g. Maria Santos" autocomplete="off"></label>
+        <label class="f"><span>Username</span><input type="text" id="nuUser" placeholder="e.g. maria" autocomplete="off"></label>
+        <label class="f"><span>Password</span><input type="password" id="nuPw" placeholder="min 6 characters"></label>
         <label class="f"><span>Role</span><select id="nuRole"><option value="regular">Regular</option><option value="admin">Admin</option></select></label>
-        <button class="btn-add" data-adduser="1">＋ Add User</button>
+        <button class="btn-add" data-adduser="1" style="grid-column:1/-1">＋ Create login</button>
       </div>` : ""}
     </div>
 
@@ -1223,14 +1420,41 @@ function switchUser(id) {
   DB.currentUserId = id; editing = false; save();
   renderWho(); renderSettings(); renderTree(); renderEditor();
 }
-function addUser() {
-  if (!isAdmin()) return;
+async function addUser() {
+  if (!isAdmin()) { alert(DENY); return; }
   const name = document.getElementById("nuName").value.trim();
+  const un = document.getElementById("nuUser").value.trim();
+  const pw = document.getElementById("nuPw").value;
   const role = document.getElementById("nuRole").value;
-  if (!name) { alert("Enter a user name."); return; }
-  if ((DB.users || []).some((u) => u.name.trim().toLowerCase() === name.toLowerCase())) { alert(`A user named "${name}" already exists.`); return; }
-  DB.users.push({ id: uid(), name, role });
+  if (!name) { alert("Enter the user's full name."); return; }
+  if (!un) { alert("Enter a username — they sign in with it."); return; }
+  if (findByUsername(un)) { alert(`The username "${un}" is already taken.`); return; }
+  if (pw.length < 6) { alert("Password must be at least 6 characters."); return; }
+  const salt = makeSalt();
+  DB.users.push({ id: uid(), name, username: un, role, salt, passHash: await hashPw(pw, salt) });
   save(); renderSettings(); renderWho();
+  alert(`Login created for ${name}.\n\nUsername: ${un}\nRole: ${role}\n\nGive them the password you just set — it isn't recoverable, but you can change it any time from the ⚙ menu.`);
+}
+async function changePassword(id) {
+  if (!isAdmin()) { alert(DENY); return; }
+  const u = (DB.users || []).find((x) => x.id === id); if (!u) return;
+  const pw = prompt(`New password for ${u.name} (@${u.username || "no username"}):`);
+  if (pw === null) return;
+  if (pw.length < 6) { alert("Password must be at least 6 characters."); return; }
+  u.salt = makeSalt(); u.passHash = await hashPw(pw, u.salt);
+  save(); renderSettings();
+  alert(`Password updated for ${u.name}.`);
+}
+function changeAccess(id) {
+  if (!isAdmin()) { alert(DENY); return; }
+  const u = (DB.users || []).find((x) => x.id === id); if (!u) return;
+  const next = u.role === "admin" ? "regular" : "admin";
+  if (next === "regular" && u.role === "admin" && DB.users.filter((x) => x.role === "admin").length <= 1) {
+    alert("There must always be at least one admin."); return;
+  }
+  if (!confirm(`Change ${u.name} from ${u.role.toUpperCase()} to ${next.toUpperCase()}?`)) return;
+  u.role = next; save(); renderSettings(); renderWho();
+  if (u.id === DB.currentUserId) { renderTree(); renderEditor(); } // your own powers changed
 }
 function deleteUser(id) {
   if (!isAdmin()) return;
@@ -1251,12 +1475,23 @@ function setPin() {
 function clearPin() { if (!isAdmin()) return; DB.adminPin = ""; save(); renderSettings(); }
 
 document.getElementById("settingsBody").addEventListener("click", (ev) => {
+  const gear = ev.target.closest("[data-umenu]");
+  if (gear) {
+    ev.stopPropagation();
+    const m = document.getElementById("um-" + gear.dataset.umenu);
+    const wasOpen = m.classList.contains("open");
+    document.querySelectorAll(".umenu").forEach((x) => x.classList.remove("open"));
+    if (!wasOpen) m.classList.add("open");
+    return;
+  }
   if (ev.target.closest("[data-adduser]")) return addUser();
   if (ev.target.closest("[data-setpin]")) return setPin();
   if (ev.target.closest("[data-clearpin]")) return clearPin();
-  const du = ev.target.closest("[data-deluser]");
-  if (du) return deleteUser(du.dataset.deluser);
+  const ua = ev.target.closest("[data-uaccess]"); if (ua) return changeAccess(ua.dataset.uaccess);
+  const up = ev.target.closest("[data-upass]");   if (up) return changePassword(up.dataset.upass);
+  const du = ev.target.closest("[data-deluser]"); if (du) return deleteUser(du.dataset.deluser);
 });
+document.addEventListener("click", () => document.querySelectorAll(".umenu").forEach((x) => x.classList.remove("open")));
 document.getElementById("settingsBody").addEventListener("change", (ev) => {
   if (ev.target.id === "switchUser") switchUser(ev.target.value);
 });
@@ -1820,9 +2055,14 @@ document.getElementById("statsPanel").addEventListener("click", (ev) => {
 document.addEventListener("click", () => { if (statsOpen) { statsOpen = false; renderStatsDD(); } });
 
 /* ============================== boot ============================== */
-renderWho();
-renderTree();
-renderEditor();
+// Nothing renders until someone signs in. On first run, the admin account is created here.
+(function bootAuth() {
+  let sid = null;
+  try { sid = sessionStorage.getItem(SESSION_KEY); } catch (e) {}
+  const u = sid ? (DB.users || []).find((x) => x.id === sid && hasCreds(x)) : null;
+  if (!needsSetup() && u) { DB.currentUserId = u.id; openApp(); return; }
+  renderGate();
+})();
 console.log("[back office] entries:", DB.entries.length);
 </script>
 </body>
