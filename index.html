@@ -1250,12 +1250,11 @@ function renderGate() {
       <h2>Create the admin account</h2>
       <div class="g-sub">First run — this account creates everyone else's logins.</div>
       <div class="gate-err" id="gErr"></div>
-      <label class="f"><span>Full name</span><input type="text" id="sName" placeholder="e.g. Jayson" autocomplete="off"></label>
       <label class="f"><span>Username</span><input type="text" id="sUser" placeholder="e.g. admin" autocomplete="off"></label>
       <label class="f"><span>Password</span><input type="password" id="sPw" placeholder="at least 6 characters"></label>
-      <label class="f"><span>Confirm password</span><input type="password" id="sPw2"></label>
       <button class="gate-btn" data-setup="1">Create admin &amp; open the app</button>
       ${gateNote}`;
+    setTimeout(() => { const i = document.getElementById("sUser"); if (i) i.focus(); }, 40);
   } else {
     card.innerHTML = `
       <div class="gate-logo">₱C</div>
@@ -1272,19 +1271,15 @@ function renderGate() {
 const gateErr = (m) => { const el = document.getElementById("gErr"); if (el) { el.textContent = m; el.classList.add("show"); } };
 
 async function doSetup() {
-  const name = document.getElementById("sName").value.trim();
   const un = document.getElementById("sUser").value.trim();
   const pw = document.getElementById("sPw").value;
-  const pw2 = document.getElementById("sPw2").value;
-  if (!name) return gateErr("Enter your full name.");
   if (!un) return gateErr("Enter a username.");
   if (pw.length < 6) return gateErr("Password must be at least 6 characters.");
-  if (pw !== pw2) return gateErr("The two passwords don't match.");
   const salt = makeSalt();
   const passHash = await hashPw(pw, salt);
   let admin = (DB.users || []).find((u) => u.role === "admin");
   if (!admin) { admin = { id: uid(), role: "admin" }; DB.users.push(admin); }
-  admin.name = name; admin.username = un; admin.salt = salt; admin.passHash = passHash;
+  admin.name = un; admin.username = un; admin.salt = salt; admin.passHash = passHash;
   DB.currentUserId = admin.id;
   save();
   try { sessionStorage.setItem(SESSION_KEY, admin.id); } catch (e) {}
@@ -1322,7 +1317,7 @@ document.getElementById("authCard").addEventListener("click", (ev) => {
 });
 document.getElementById("authCard").addEventListener("keydown", (ev) => {
   if (ev.key !== "Enter") return;
-  if (document.getElementById("sPw2")) doSetup(); else doLogin();
+  if (document.getElementById("sPw")) doSetup(); else doLogin();
 });
 
 function openSettings() { renderSettings(); document.getElementById("settingsOvl").classList.add("open"); }
@@ -1410,8 +1405,52 @@ function renderSettings() {
       <b>⚠ This is a workflow guardrail, not real security.</b> Everything runs in this browser with no server,
       so anyone with this file can switch roles here or bypass it with developer tools. It reliably prevents
       <i>accidents</i> — it cannot stop a determined user. Real enforcement needs the Supabase login.
+    </div>
+
+    <div class="sec">
+      <h4>Public API (read-only)</h4>
+      <p class="h">The web address your front-end website reads departures from. It returns package,
+        tour code, travel dates, status, slots left and price — and <b>never</b> cost, profit, ROI,
+        balances or customer names. Read-only: nothing can be changed through it.</p>
+      ${admin ? `<label class="f"><span>Your Supabase project URL</span>
+        <input type="text" id="apiBase" placeholder="https://YOUR_PROJECT.supabase.co" value="${esc(DB.apiBase || "")}">
+        <small>From Supabase → Project Settings → API. Just the base URL — this builds the endpoint below.</small></label>
+      <div style="margin:2px 0 12px"><button class="btn-add" data-saveapi="1">Save URL</button></div>` : ""}
+      <label class="f"><span>Endpoint</span>
+        <input type="text" id="apiUrl" readonly value="${esc(apiEndpoint())}" onclick="this.select()"></label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:2px">
+        <button class="btn-lite" data-copyapi="1">📋 Copy endpoint</button>
+        <span class="h" id="apiCopied" style="align-self:center"></span>
+      </div>
+      <div class="perm" style="margin-top:11px"><table>
+        <thead><tr><th>Field</th><th style="text-align:center">Public?</th></tr></thead>
+        <tbody>
+          ${[["package", 1], ["tour_code", 1], ["travel dates", 1], ["status", 1], ["slots_left", 1], ["price_per_pax", 1],
+             ["total cost", 0], ["profit / ROI", 0], ["balance payable", 0], ["customer names", 0]]
+            .map((r) => `<tr><td>${r[0]}</td><td style="text-align:center" class="${r[1] ? "yes" : "no"}">${r[1] ? "✔ shown" : "✕ hidden"}</td></tr>`).join("")}
+        </tbody>
+      </table></div>
+      <p class="h" style="margin-top:9px">To switch it on: run <b>collectives-api.sql</b> once in Supabase, then point the
+        website at the endpoint above. Full steps are in <b>API-README.md</b>.</p>
     </div>`;
 }
+function apiEndpoint() {
+  const base = (DB.apiBase || "https://YOUR_PROJECT.supabase.co").replace(/\/+$/, "");
+  return base + "/rest/v1/collectives_public";
+}
+function saveApiBase() {
+  if (!isAdmin()) { alert(DENY); return; }
+  const v = document.getElementById("apiBase").value.trim();
+  DB.apiBase = v; save(); renderSettings();
+}
+function copyApiEndpoint() {
+  const url = apiEndpoint();
+  const done = () => { const s = document.getElementById("apiCopied"); if (s) { s.textContent = "Copied ✓"; setTimeout(() => (s.textContent = ""), 1600); } };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(done, () => { selectApiInput(); done(); });
+  } else { selectApiInput(); try { document.execCommand("copy"); } catch (e) {} done(); }
+}
+function selectApiInput() { const i = document.getElementById("apiUrl"); if (i) { i.focus(); i.select(); } }
 function switchUser(id) {
   const u = (DB.users || []).find((x) => x.id === id); if (!u) return;
   if (u.role === "admin" && DB.adminPin && !isAdmin()) {
@@ -1487,6 +1526,8 @@ document.getElementById("settingsBody").addEventListener("click", (ev) => {
   if (ev.target.closest("[data-adduser]")) return addUser();
   if (ev.target.closest("[data-setpin]")) return setPin();
   if (ev.target.closest("[data-clearpin]")) return clearPin();
+  if (ev.target.closest("[data-saveapi]")) return saveApiBase();
+  if (ev.target.closest("[data-copyapi]")) return copyApiEndpoint();
   const ua = ev.target.closest("[data-uaccess]"); if (ua) return changeAccess(ua.dataset.uaccess);
   const up = ev.target.closest("[data-upass]");   if (up) return changePassword(up.dataset.upass);
   const du = ev.target.closest("[data-deluser]"); if (du) return deleteUser(du.dataset.deluser);
