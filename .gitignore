@@ -9,6 +9,11 @@
 !.env.example
 **/.env
 
+# The one-time data-load script has your full per-departure costs/margins.
+# It goes into Supabase from your local copy - never into this public repo.
+collectives-data-load.sql
+*data-load*.sql
+
 # Anything exported/derived from the Supabase booking data (real customer PII)
 Collectives - Missing Supplier Costs.csv
 *supplier-costs*.csv

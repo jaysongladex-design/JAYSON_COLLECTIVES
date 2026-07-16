@@ -1091,7 +1091,6 @@ function seedDB() {
     updatedAt: new Date().toISOString(),
     users: [{ id: ADMIN_ID, name: "Administrator", role: "admin" }],
     currentUserId: ADMIN_ID,
-    adminPin: "",
     entries: SEED.map((r) => ({
       id: uid(),
       package: r.package || "",
@@ -1145,7 +1144,6 @@ function migrateUsers(d) {
   d.users.forEach((u) => { if (u.role !== "admin" && u.role !== "regular") u.role = "regular"; });
   if (!d.users.some((u) => u.role === "admin")) d.users[0].role = "admin"; // never lock everyone out
   if (!d.users.some((u) => u.id === d.currentUserId)) d.currentUserId = d.users[0].id;
-  if (typeof d.adminPin !== "string") d.adminPin = "";
   return d;
 }
 function load() {
@@ -1391,16 +1389,6 @@ function renderSettings() {
       </table></div>
     </div>
 
-    <div class="sec">
-      <h4>Admin PIN (optional)</h4>
-      <p class="h">${DB.adminPin ? "A PIN is set — switching to an admin user will ask for it." : "No PIN set — anyone can switch to an admin user."}</p>
-      ${admin ? `<div class="u-form">
-        <label class="f"><span>New PIN</span><input type="password" id="pinVal" placeholder="${DB.adminPin ? "•••• (set)" : "not set"}"></label>
-        <button class="btn-add" data-setpin="1">Save PIN</button>
-        <button class="btn-lite" data-clearpin="1">Clear</button>
-      </div>` : `<p class="h">Only admins can change the PIN.</p>`}
-    </div>
-
     <div class="warnbox">
       <b>⚠ This is a workflow guardrail, not real security.</b> Everything runs in this browser with no server,
       so anyone with this file can switch roles here or bypass it with developer tools. It reliably prevents
@@ -1453,9 +1441,6 @@ function copyApiEndpoint() {
 function selectApiInput() { const i = document.getElementById("apiUrl"); if (i) { i.focus(); i.select(); } }
 function switchUser(id) {
   const u = (DB.users || []).find((x) => x.id === id); if (!u) return;
-  if (u.role === "admin" && DB.adminPin && !isAdmin()) {
-    if (prompt("Enter the admin PIN:") !== DB.adminPin) { alert("Incorrect PIN — user not switched."); renderSettings(); return; }
-  }
   DB.currentUserId = id; editing = false; save();
   renderWho(); renderSettings(); renderTree(); renderEditor();
 }
@@ -1504,15 +1489,6 @@ function deleteUser(id) {
   DB.users = DB.users.filter((x) => x.id !== id);
   save(); renderSettings(); renderWho();
 }
-function setPin() {
-  if (!isAdmin()) return;
-  const v = document.getElementById("pinVal").value.trim();
-  if (!v) { alert("Enter a PIN."); return; }
-  DB.adminPin = v; save(); renderSettings();
-  alert("Admin PIN saved.\n\nNote: this is stored in plain text in your browser — it's a speed bump, not real security.");
-}
-function clearPin() { if (!isAdmin()) return; DB.adminPin = ""; save(); renderSettings(); }
-
 document.getElementById("settingsBody").addEventListener("click", (ev) => {
   const gear = ev.target.closest("[data-umenu]");
   if (gear) {
@@ -1524,8 +1500,6 @@ document.getElementById("settingsBody").addEventListener("click", (ev) => {
     return;
   }
   if (ev.target.closest("[data-adduser]")) return addUser();
-  if (ev.target.closest("[data-setpin]")) return setPin();
-  if (ev.target.closest("[data-clearpin]")) return clearPin();
   if (ev.target.closest("[data-saveapi]")) return saveApiBase();
   if (ev.target.closest("[data-copyapi]")) return copyApiEndpoint();
   const ua = ev.target.closest("[data-uaccess]"); if (ua) return changeAccess(ua.dataset.uaccess);
