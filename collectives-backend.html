@@ -76,6 +76,14 @@
   .pkg-btn .cnt{background:var(--navy);color:#fff;border-radius:20px;font-size:10.5px;padding:1px 7px;font-weight:700}
   .pkg-btn .chev{color:var(--muted);font-size:10px}
   .codes{padding:6px 0 6px 8px;border-left:2px solid var(--line);margin:6px 0 8px 8px;display:flex;flex-direction:column;gap:4px}
+  .pkg-head{display:flex;align-items:stretch;gap:6px}
+  .pkg-head .pkg-btn{flex:1;min-width:0}
+  .pkg-gear{flex:none;background:#F6F9FD;border:1px solid var(--line);border-radius:9px;padding:0 10px;cursor:pointer;font-size:13px;color:var(--muted)}
+  .pkg-gear:hover{background:#EDF3FA;color:var(--navy)}
+  .pkgdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle;flex:none}
+  .swatches{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}
+  .sw{width:27px;height:27px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--line);cursor:pointer;padding:0}
+  .sw:hover{transform:scale(1.12)}
   .code-btn{text-align:left;background:#fff;border:1px solid var(--line);border-radius:8px;padding:7px 9px;cursor:pointer;font-size:12.5px;display:flex;justify-content:space-between;gap:8px;align-items:center}
   .code-btn:hover{background:#F6F9FD}
   .code-btn.active{background:var(--navy);border-color:var(--navy);color:#fff}
@@ -315,6 +323,16 @@
       <button class="x" onclick="closeSettings()" title="Close">✕</button>
     </div>
     <div class="modal-b" id="settingsBody"></div>
+  </div>
+</div>
+
+<div class="ovl" id="pkgOvl">
+  <div class="modal" role="dialog" aria-label="Package settings" style="max-width:440px">
+    <div class="modal-h">
+      <div><h2>Package settings</h2><p id="pkgSub"></p></div>
+      <button class="x" onclick="closePkgCfg()" title="Close">✕</button>
+    </div>
+    <div class="modal-b" id="pkgBody"></div>
   </div>
 </div>
 
@@ -1091,6 +1109,7 @@ function seedDB() {
     updatedAt: new Date().toISOString(),
     users: [{ id: ADMIN_ID, name: "Administrator", role: "admin" }],
     currentUserId: ADMIN_ID,
+    packageColors: {},
     entries: SEED.map((r) => ({
       id: uid(),
       package: r.package || "",
@@ -1144,6 +1163,7 @@ function migrateUsers(d) {
   d.users.forEach((u) => { if (u.role !== "admin" && u.role !== "regular") u.role = "regular"; });
   if (!d.users.some((u) => u.role === "admin")) d.users[0].role = "admin"; // never lock everyone out
   if (!d.users.some((u) => u.id === d.currentUserId)) d.currentUserId = d.users[0].id;
+  if (!d.packageColors || typeof d.packageColors !== "object") d.packageColors = {};
   return d;
 }
 function load() {
@@ -1397,19 +1417,22 @@ function renderSettings() {
 
     <div class="sec">
       <h4>Public API (read-only)</h4>
-      <p class="h">The web address your front-end website reads departures from. It returns package,
-        tour code, travel dates, status, slots left and price — and <b>never</b> cost, profit, ROI,
-        balances or customer names. Read-only: nothing can be changed through it.</p>
-      ${admin ? `<label class="f"><span>Your Supabase project URL</span>
-        <input type="text" id="apiBase" placeholder="https://YOUR_PROJECT.supabase.co" value="${esc(DB.apiBase || "")}">
-        <small>From Supabase → Project Settings → API. Just the base URL — this builds the endpoint below.</small></label>
-      <div style="margin:2px 0 12px"><button class="btn-add" data-saveapi="1">Save URL</button></div>` : ""}
-      <label class="f"><span>Endpoint</span>
+      <p class="h"><b>No key needed.</b> Anyone can open this URL — in a browser or from any website.
+        It returns package, tour code, travel dates, status, slots left and price — and <b>never</b>
+        cost, profit, ROI, balances or customer names.</p>
+      <p class="h" style="margin-top:-2px">It's a <b>snapshot this app generates</b>. After you change departures,
+        click <b>Export</b> and publish the new file to refresh it.</p>
+      <label class="f"><span>Public URL (on your GitHub page)</span>
         <input type="text" id="apiUrl" readonly value="${esc(apiEndpoint())}" onclick="this.select()"></label>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:2px">
-        <button class="btn-lite" data-copyapi="1">📋 Copy endpoint</button>
+        <button class="btn-lite" data-copyapi="1">📋 Copy URL</button>
+        ${admin ? `<button class="btn-add" data-exportcat="1">⬇ Export catalog file</button>` : ""}
         <span class="h" id="apiCopied" style="align-self:center"></span>
       </div>
+      ${admin ? `<label class="f" style="margin-top:10px"><span>Published-at URL (edit only if your repo/username differs)</span>
+        <input type="text" id="apiBase" value="${esc(DB.catalogUrl || "")}" placeholder="${esc(PAGES_URL)}">
+        <small>Leave blank to use the default shown above.</small></label>
+      <div style="margin:2px 0 2px"><button class="btn-lite" data-saveapi="1">Save URL</button></div>` : ""}
       <div class="perm" style="margin-top:11px"><table>
         <thead><tr><th>Field</th><th style="text-align:center">Public?</th></tr></thead>
         <tbody>
@@ -1418,18 +1441,34 @@ function renderSettings() {
             .map((r) => `<tr><td>${r[0]}</td><td style="text-align:center" class="${r[1] ? "yes" : "no"}">${r[1] ? "✔ shown" : "✕ hidden"}</td></tr>`).join("")}
         </tbody>
       </table></div>
-      <p class="h" style="margin-top:9px">To switch it on: run <b>collectives-api.sql</b> once in Supabase, then point the
-        website at the endpoint above. Full steps are in <b>API-README.md</b>.</p>
+      <p class="h" style="margin-top:9px">The app writes <b>collectives-public.json</b>. Publish it in your repo's
+        <b>docs/</b> folder and turn on GitHub Pages (source: <b>main / docs</b>). Full steps in <b>API-README.md</b>.</p>
     </div>`;
 }
-function apiEndpoint() {
-  const base = (DB.apiBase || "https://YOUR_PROJECT.supabase.co").replace(/\/+$/, "");
-  return base + "/rest/v1/collectives_public";
-}
+const PAGES_URL = "https://jaysongladex-design.github.io/JAYSON_COLLECTIVES/collectives-public.json";
+function apiEndpoint() { return (DB.catalogUrl && DB.catalogUrl.trim()) || PAGES_URL; }
 function saveApiBase() {
   if (!isAdmin()) { alert(DENY); return; }
-  const v = document.getElementById("apiBase").value.trim();
-  DB.apiBase = v; save(); renderSettings();
+  DB.catalogUrl = document.getElementById("apiBase").value.trim(); save(); renderSettings();
+}
+/** The app "generates" the public API: a safe-fields-only catalog file to publish. */
+function exportCatalog() {
+  if (!isAdmin()) { alert(DENY); return; }
+  const isoMDY = (s) => { const p = String(s || "").trim().split("/"); if (p.length !== 3) return null; const [m, d, y] = p; if (!m || !d || !y) return null; return String(y).padStart(4, "0") + "-" + String(m).padStart(2, "0") + "-" + String(d).padStart(2, "0"); };
+  const travel = (raw) => { const parts = String(raw || "").split(/\s+-\s+/); return { start: isoMDY(parts[0]), end: isoMDY(parts[parts.length - 1]) }; };
+  const rows = DB.entries.filter((e) => !e.voided).map((e) => {
+    const d = derive(e), t = travel(e.travelRaw), left = Math.max(0, d.remaining);
+    return { package: e.package || "", tour_code: e.tourCode || "", travel_raw: e.travelRaw || "",
+      travel_start: t.start, travel_end: t.end, status: stOf(e), total_slots: d.totalSlots,
+      slots_left: left, sold_out: left <= 0, price_per_pax: (e.amountPerPax ?? null) };
+  }).sort((a, b) => String(a.travel_start || "").localeCompare(String(b.travel_start || "")));
+  const blob = new Blob([JSON.stringify(rows, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "collectives-public.json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const s = document.getElementById("apiCopied"); if (s) { s.textContent = "Exported " + rows.length + " departures ✓"; setTimeout(() => (s.textContent = ""), 2400); }
 }
 function copyApiEndpoint() {
   const url = apiEndpoint();
@@ -1501,6 +1540,7 @@ document.getElementById("settingsBody").addEventListener("click", (ev) => {
   }
   if (ev.target.closest("[data-adduser]")) return addUser();
   if (ev.target.closest("[data-saveapi]")) return saveApiBase();
+  if (ev.target.closest("[data-exportcat]")) return exportCatalog();
   if (ev.target.closest("[data-copyapi]")) return copyApiEndpoint();
   const ua = ev.target.closest("[data-uaccess]"); if (ua) return changeAccess(ua.dataset.uaccess);
   const up = ev.target.closest("[data-upass]");   if (up) return changePassword(up.dataset.upass);
@@ -1648,12 +1688,67 @@ function renderTree() {
             <span class="sub">${s === "VOID" ? "void" : qty(d.remaining) + " left"}</span></button>`;
       }).join("")}
       ${isAdmin() ? `<button class="add-btn" data-newcode="${esc(pkg)}">＋ New Tour Code</button>` : ""}</div>` : "";
-    return `<div class="pkg">
-        <button class="pkg-btn" data-pkg="${esc(pkg)}">
-          <span>${esc(pkg)}</span>
-          <span><span class="cnt">${list.length}</span> <span class="chev">${open ? "▾" : "▸"}</span></span>
-        </button>${codes}</div>`;
+    const color = pkgColor(pkg);
+    return `<div class="pkg"${color ? ` style="border-left:4px solid ${esc(color)};border-radius:9px"` : ""}>
+        <div class="pkg-head">
+          <button class="pkg-btn" data-pkg="${esc(pkg)}">
+            <span>${color ? `<i class="pkgdot" style="background:${esc(color)}"></i>` : ""}${esc(pkg)}</span>
+            <span><span class="cnt">${list.length}</span> <span class="chev">${open ? "▾" : "▸"}</span></span>
+          </button>
+          ${isAdmin() ? `<button class="pkg-gear" data-pkgcfg="${esc(pkg)}" title="Rename / color">⚙</button>` : ""}
+        </div>${codes}</div>`;
   }).join("");
+}
+function pkgColor(pkg) { return (DB.packageColors && DB.packageColors[pkg]) || ""; }
+
+/* ===== per-package settings: rename + color ===== */
+let pkgCfgTarget = null;
+const PKG_SWATCHES = ["#1E5AA8", "#1FA971", "#E1A128", "#C0453B", "#7A4FB5", "#0E9AA7", "#D9639E", "#11151C"];
+function openPkgCfg(pkg) {
+  if (!isAdmin()) { alert(DENY); return; }
+  pkgCfgTarget = pkg;
+  const count = DB.entries.filter((e) => e.package === pkg).length;
+  const color = pkgColor(pkg) || "#1E5AA8";
+  document.getElementById("pkgSub").textContent = count + " departure" + (count === 1 ? "" : "s") + " in this package";
+  document.getElementById("pkgBody").innerHTML = `
+    <label class="f"><span>Package name</span>
+      <input type="text" id="pkgName" value="${esc(pkg)}" autocomplete="off">
+      <small>Renaming updates all ${count} departures in this package.</small></label>
+    <label class="f"><span>Color</span>
+      <input type="color" id="pkgColor" value="${esc(color)}" style="height:42px;padding:2px;cursor:pointer"></label>
+    <div class="swatches">${PKG_SWATCHES.map((c) => `<button class="sw" data-sw="${c}" style="background:${c}" title="${c}"></button>`).join("")}
+      <button class="sw" data-sw="" style="background:#fff" title="No color">✕</button></div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn-add" data-pkgsave="1">Save</button>
+      <button class="btn-lite" onclick="closePkgCfg()">Cancel</button>
+    </div>`;
+  document.getElementById("pkgOvl").classList.add("open");
+  setTimeout(() => { const i = document.getElementById("pkgName"); if (i) { i.focus(); i.select(); } }, 40);
+}
+function closePkgCfg() { document.getElementById("pkgOvl").classList.remove("open"); pkgCfgTarget = null; }
+function savePkgCfg() {
+  if (!isAdmin()) { alert(DENY); return; }
+  const oldName = pkgCfgTarget; if (oldName == null) return;
+  const newName = document.getElementById("pkgName").value.trim();
+  const color = document.getElementById("pkgColor").value;
+  const clearColor = document.getElementById("pkgBody").dataset.clear === "1";
+  if (!newName) { alert("Enter a package name."); return; }
+  if (!DB.packageColors || typeof DB.packageColors !== "object") DB.packageColors = {};
+  if (newName !== oldName) {
+    const count = DB.entries.filter((e) => e.package === oldName).length;
+    const exists = allPackages().includes(newName);
+    const msg = exists
+      ? `A package named "${newName}" already exists.\n\nSaving will MERGE these ${count} departure(s) into it. Continue?`
+      : `Rename "${oldName}" to "${newName}"?\n\nThis updates ${count} departure(s).`;
+    if (!confirm(msg)) return;
+    DB.entries.forEach((e) => { if (e.package === oldName) e.package = newName; });
+    delete DB.packageColors[oldName];
+    if (sel.pkg === oldName) sel.pkg = newName;
+    if (statsPkg === oldName) statsPkg = newName;
+  }
+  if (clearColor) delete DB.packageColors[newName];
+  else DB.packageColors[newName] = color;
+  save(); closePkgCfg(); renderTree(); renderEditor();
 }
 
 /* ============================== editor ============================== */
@@ -1991,6 +2086,8 @@ document.getElementById("csvInput").addEventListener("change", (ev) => {
 
 /* ============================== events ============================== */
 document.getElementById("tree").addEventListener("click", (ev) => {
+  const cfgBtn = ev.target.closest("[data-pkgcfg]");
+  if (cfgBtn) { ev.stopPropagation(); openPkgCfg(cfgBtn.dataset.pkgcfg); return; }
   const pkgBtn = ev.target.closest("[data-pkg]");
   if (pkgBtn) { const p = pkgBtn.dataset.pkg; sel.pkg = sel.pkg === p ? null : p; renderTree(); return; }
   const codeBtn = ev.target.closest("[data-id]");
@@ -1998,6 +2095,20 @@ document.getElementById("tree").addEventListener("click", (ev) => {
   const addBtn = ev.target.closest("[data-newcode]");
   if (addBtn) { newEntry(addBtn.dataset.newcode); return; }
 });
+document.getElementById("pkgBody").addEventListener("click", (ev) => {
+  const sw = ev.target.closest("[data-sw]");
+  if (sw) {
+    const body = document.getElementById("pkgBody");
+    if (sw.dataset.sw === "") { body.dataset.clear = "1"; }         // "No color" chosen
+    else { body.dataset.clear = "0"; document.getElementById("pkgColor").value = sw.dataset.sw; }
+    return;
+  }
+  if (ev.target.closest("[data-pkgsave]")) return savePkgCfg();
+});
+document.getElementById("pkgBody").addEventListener("input", (ev) => {
+  if (ev.target.id === "pkgColor") document.getElementById("pkgBody").dataset.clear = "0"; // picking a color un-clears
+});
+document.getElementById("pkgOvl").addEventListener("click", (ev) => { if (ev.target.id === "pkgOvl") closePkgCfg(); });
 document.getElementById("editor").addEventListener("input", (ev) => {
   if (ev.target.tagName === "SELECT") return; // dropdowns handled by the change listener below
   const key = ev.target.dataset.field; if (!key) return;

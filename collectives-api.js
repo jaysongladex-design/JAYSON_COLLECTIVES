@@ -1,46 +1,38 @@
 /* =============================================================================
  * collectives-api.js  -  read-only client for the Collectives public catalog
  * -----------------------------------------------------------------------------
- * Drop this into the front-end site. No dependencies, no build step - it uses
- * the browser's fetch. Every method only READS; there is no write path.
+ * The catalog is a static JSON file published on your own GitHub page.
+ * No key, no server, no dependencies — just fetch it.
  *
- * The anon key below is safe to ship in a public site ONLY because the API it
- * talks to (the collectives_public view) contains no cost, profit or customer
- * data. Do not paste any other Supabase key here.
+ *   // default URL is baked in; call configure(url) only to override it
+ *   CollectivesAPI.available("HONG KONG").then(render);
+ *
+ * Every method only READS. Refresh the data by re-exporting from the app and
+ * publishing the new collectives-public.json.
  * ========================================================================== */
 
 const CollectivesAPI = (() => {
-  // ---- configure once, at startup -----------------------------------------
-  //   CollectivesAPI.configure("https://YOUR_PROJECT.supabase.co", "YOUR_ANON_KEY");
-  let BASE = "";
-  let KEY = "";
+  let URL_ = "https://jaysongladex-design.github.io/JAYSON_COLLECTIVES/collectives-public.json";
 
-  function configure(url, anonKey) {
-    BASE = String(url || "").replace(/\/+$/, "") + "/rest/v1";
-    KEY = anonKey || "";
-  }
+  // Optional: point at a different published file.
+  function configure(url) { if (url) URL_ = url; }
 
-  async function get(path) {
-    if (!BASE || !KEY) throw new Error("Call CollectivesAPI.configure(url, anonKey) first.");
-    const res = await fetch(BASE + path, {
-      headers: { apikey: KEY, Authorization: "Bearer " + KEY },
-    });
+  // Fetch the whole catalog (small file — filter in JS).
+  async function all() {
+    const res = await fetch(URL_, { cache: "no-store" });
     if (!res.ok) throw new Error("API " + res.status + ": " + (await res.text()));
     return res.json();
   }
 
-  const enc = encodeURIComponent;
+  const byStart = (a, b) => String(a.travel_start || "").localeCompare(String(b.travel_start || ""));
 
-  // ---- read methods --------------------------------------------------------
-
-  /** All non-void departures, soonest first. Pass filters to narrow. */
-  function departures({ pkg, status, availableOnly, order } = {}) {
-    const q = ["select=*"];
-    if (pkg) q.push("package=eq." + enc(pkg));
-    if (status) q.push("status=eq." + enc(status)); // PENDING | FINISHED
-    if (availableOnly) q.push("slots_left=gt.0");
-    q.push("order=" + enc(order || "travel_start.asc"));
-    return get("/collectives_public?" + q.join("&"));
+  /** All non-void departures, soonest first. Optional filters. */
+  async function departures({ pkg, status, availableOnly } = {}) {
+    let rows = await all();
+    if (pkg) rows = rows.filter((r) => r.package === pkg);
+    if (status) rows = rows.filter((r) => r.status === status);
+    if (availableOnly) rows = rows.filter((r) => r.slots_left > 0);
+    return rows.sort(byStart);
   }
 
   /** Only what a customer can still book: upcoming and with slots left. */
@@ -49,17 +41,16 @@ const CollectivesAPI = (() => {
   }
 
   /** One departure by its tour code (returns an array; usually 0 or 1). */
-  function byTourCode(code) {
-    return get("/collectives_public?select=*&tour_code=eq." + enc(code));
+  async function byTourCode(code) {
+    return (await all()).filter((r) => r.tour_code === code);
   }
 
   /** Distinct package names, for building a menu / filter. */
   async function packages() {
-    const rows = await get("/collectives_public?select=package");
-    return [...new Set(rows.map((r) => r.package).filter(Boolean))].sort();
+    return [...new Set((await all()).map((r) => r.package).filter(Boolean))].sort();
   }
 
-  return { configure, departures, available, byTourCode, packages };
+  return { configure, all, departures, available, byTourCode, packages };
 })();
 
 // Works both as a global (plain <script>) and as a module import.

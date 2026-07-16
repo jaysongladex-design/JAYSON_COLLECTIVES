@@ -1,25 +1,43 @@
-# Collectives — Public Read-Only API
+# Collectives — Public Read-Only API (on your own GitHub page)
 
-A read-only feed of your departures for the front-end website. Safe fields only —
-no cost, profit, ROI, balances, or customer names ever leave the database.
+A read-only feed of your departures, served from **your own site** — no Supabase,
+no key. The **app generates** the file; GitHub publishes it.
 
-## Setup (once)
-
-1. Run `supabase-migration.sql` in Supabase → SQL Editor (creates the tables).
-2. Run `collectives-api.sql` in the same place (creates the public catalog).
-
-That's it — the API is live. Supabase turns the view into a web endpoint automatically.
-
-## The endpoint
+## The URL
 
 ```
-GET  https://YOUR_PROJECT.supabase.co/rest/v1/collectives_public?select=*
-Headers:
-  apikey:        YOUR_ANON_KEY
-  Authorization: Bearer YOUR_ANON_KEY
+https://jaysongladex-design.github.io/JAYSON_COLLECTIVES/collectives-public.json
 ```
 
-Read-only: only `GET` works. There is no way to add, edit, or delete through this key.
+Anyone can open it — in a browser or from any website. It's a **snapshot**: it
+reflects your data at the moment you last exported and published it.
+
+## How it works
+
+1. In the app → **Settings → Public API**, click **⬇ Export catalog file**. The
+   app writes `collectives-public.json` containing only safe fields.
+2. That file lives in the repo's **`docs/`** folder.
+3. **GitHub Pages** serves the `docs/` folder at the URL above.
+
+Only the `docs/` folder is published — the app itself (which contains your costs)
+is **not** served at any web address.
+
+## One-time setup: turn on GitHub Pages
+
+Repo → **Settings → Pages**:
+- **Source:** Deploy from a branch
+- **Branch:** `main`  •  **Folder:** `/docs`
+- **Save**
+
+Wait ~1 minute for the first build, then the URL is live.
+
+## Refreshing after you change data
+
+1. Click **⬇ Export catalog file** in the app (downloads a new `collectives-public.json`).
+2. Replace `docs/collectives-public.json` in the repo with it and push.
+3. GitHub Pages redeploys in a minute. Done.
+
+(If you'd like, I can do steps 2–3 for you each time — just say so.)
 
 ### Fields you get back
 
@@ -30,59 +48,34 @@ Read-only: only `GET` works. There is no way to add, edit, or delete through thi
 | `travel_raw` | dates as typed — "5/16/2026 - 5/21/2026" |
 | `travel_start`, `travel_end` | parsed dates |
 | `status` | PENDING (upcoming) or FINISHED (trip over) |
-| `total_slots` | paid + free slots |
-| `slots_left` | how many are still open |
-| `sold_out` | true / false |
+| `total_slots`, `slots_left`, `sold_out` | availability |
 | `price_per_pax` | selling price per person |
 
-Fields deliberately **not** included: total cost, profit, ROI, balance payable,
-payment records, customer names. Voided departures are never returned.
-
-### Common queries
-
-```
-# Everything a customer can still book (upcoming, slots left), soonest first
-…/collectives_public?select=*&status=eq.PENDING&slots_left=gt.0&order=travel_start.asc
-
-# One package
-…/collectives_public?select=*&package=eq.HONG%20KONG
-
-# One tour code
-…/collectives_public?select=*&tour_code=eq.GDX%2022056
-```
+Never included: cost, profit, ROI, balances, payments, customer names. Voided
+departures are never in the file.
 
 ## Using it from the website
-
-Include `collectives-api.js`, configure it once, then call the read methods:
 
 ```html
 <script src="collectives-api.js"></script>
 <script>
-  CollectivesAPI.configure("https://YOUR_PROJECT.supabase.co", "YOUR_ANON_KEY");
-
-  // Bookable Hong Kong departures
+  // default URL is baked in — no configure() needed
   CollectivesAPI.available("HONG KONG").then((rows) => {
-    rows.forEach((d) => {
-      console.log(d.tour_code, d.travel_raw, d.slots_left + " left", "₱" + d.price_per_pax);
-    });
+    rows.forEach((d) => console.log(d.tour_code, d.travel_raw, d.slots_left + " left", "₱" + d.price_per_pax));
   });
-
-  // Menu of packages
   CollectivesAPI.packages().then((list) => console.log(list));
 </script>
 ```
 
-## Where the values come from
+Or with no library at all:
 
-- `YOUR_PROJECT` and `YOUR_ANON_KEY` are in your Supabase dashboard →
-  **Project Settings → API**. Do not paste them into any file that goes to a
-  **public** GitHub repo — put them in the front end's own config/`.env`.
-- The anon key **is** meant to be public in the website, and that's fine here:
-  it can reach only this safe catalog. The reason to still keep it out of the
-  back-office repo is habit and to avoid confusion with the sensitive key.
+```js
+const rows = await (await fetch("https://jaysongladex-design.github.io/JAYSON_COLLECTIVES/collectives-public.json")).json();
+```
 
-## One thing still open
+## Live vs snapshot
 
-Your existing booking table lets the anon key read every customer record — that
-predates this API and is unrelated to it. Until its row-level security is
-tightened, that exposure remains. Say the word and I'll write that fix.
+This is a **snapshot** — simple, keyless, on your own domain, but you refresh it
+by exporting + publishing. If you later want it to **update automatically** the
+instant data changes, that's the Supabase route (`collectives-api.sql` +
+`collectives-api-function.ts`), which is kept in this repo as the alternative.
