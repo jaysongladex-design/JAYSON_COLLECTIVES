@@ -185,7 +185,8 @@
   .gate.hidden{display:none}
   .gate-card{background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.4);width:100%;max-width:400px;padding:26px}
   .gate-logo{width:52px;height:52px;border-radius:13px;background:linear-gradient(135deg,var(--gold2),var(--gold));
-             display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--navy);font-size:19px;margin:0 auto 14px}
+             display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--navy);font-size:19px;margin:0 auto 8px}
+  .gate-brand{text-align:center;font-weight:800;color:var(--navy);font-size:16px;letter-spacing:.3px;margin:0 0 16px}
   .gate-card h2{margin:0;text-align:center;font-size:18px;color:var(--navy)}
   .gate-card .g-sub{text-align:center;font-size:12px;color:var(--muted);margin:4px 0 18px}
   .gate-card label.f{margin-bottom:11px}
@@ -284,9 +285,9 @@
 <div class="gate" id="authGate"><div class="gate-card" id="authCard"></div></div>
 <header class="topbar">
   <div class="brand">
-    <div class="logo">₱C</div>
+    <div class="logo">CF</div>
     <div>
-      <h1>Collectives Back Office</h1>
+      <h1>Collectives Finance</h1>
       <p>INTL COLLECTIVES · EDIT · UPDATE · PAYMENT LOG</p>
     </div>
   </div>
@@ -1264,7 +1265,8 @@ function renderGate() {
   gate.classList.remove("hidden");
   if (needsSetup()) {
     card.innerHTML = `
-      <div class="gate-logo">₱C</div>
+      <div class="gate-logo">CF</div>
+      <div class="gate-brand">Collectives Finance</div>
       <h2>Create the admin account</h2>
       <div class="g-sub">First run — this account creates everyone else's logins.</div>
       <div class="gate-err" id="gErr"></div>
@@ -1275,8 +1277,9 @@ function renderGate() {
     setTimeout(() => { const i = document.getElementById("sUser"); if (i) i.focus(); }, 40);
   } else {
     card.innerHTML = `
-      <div class="gate-logo">₱C</div>
-      <h2>Collectives Back Office</h2>
+      <div class="gate-logo">CF</div>
+      <div class="gate-brand">Collectives Finance</div>
+      <h2>Sign in</h2>
       <div class="g-sub">Sign in to continue</div>
       <div class="gate-err" id="gErr"></div>
       <label class="f"><span>Username</span><input type="text" id="lUser" autocomplete="username"></label>
@@ -1391,12 +1394,24 @@ function renderSettings() {
         </div>`).join("")}
       ${admin ? `
       <div class="u-form" style="margin-top:11px;grid-template-columns:1fr 1fr">
-        <label class="f"><span>Full name</span><input type="text" id="nuName" placeholder="e.g. Maria Santos" autocomplete="off"></label>
         <label class="f"><span>Username</span><input type="text" id="nuUser" placeholder="e.g. maria" autocomplete="off"></label>
         <label class="f"><span>Password</span><input type="password" id="nuPw" placeholder="min 6 characters"></label>
         <label class="f"><span>Role</span><select id="nuRole"><option value="regular">Regular</option><option value="admin">Admin</option></select></label>
         <button class="btn-add" data-adduser="1" style="grid-column:1/-1">＋ Create login</button>
       </div>` : ""}
+    </div>
+
+    <div class="sec">
+      <h4>Backup &amp; Restore</h4>
+      <p class="h">Your data lives in this browser, so it can be lost if the browser resets. <b>Download a backup</b>
+        whenever you make changes — then <b>Restore</b> brings back your admin, users, and all departures in one click,
+        even on another computer.</p>
+      ${admin ? `<div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-add" data-backup="1">⬇ Download backup</button>
+        <button class="btn-lite" data-restore="1">⬆ Restore from file</button>
+        <input type="file" id="restoreFile" accept="application/json,.json" style="display:none">
+        <span class="h" id="backupMsg" style="align-self:center"></span>
+      </div>` : `<p class="h">Only admins can back up or restore.</p>`}
     </div>
 
     <div class="sec">
@@ -1478,6 +1493,40 @@ function copyApiEndpoint() {
   } else { selectApiInput(); try { document.execCommand("copy"); } catch (e) {} done(); }
 }
 function selectApiInput() { const i = document.getElementById("apiUrl"); if (i) { i.focus(); i.select(); } }
+
+/* ===== Backup & Restore: save/restore the whole app (users + data) to a file ===== */
+function downloadBackup() {
+  if (!isAdmin()) { alert(DENY); return; }
+  const blob = new Blob([JSON.stringify(DB, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "collectives-backup-" + todayISO() + ".json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const s = document.getElementById("backupMsg");
+  if (s) { s.textContent = "Backup saved ✓"; setTimeout(() => (s.textContent = ""), 2400); }
+}
+function restoreBackup(file) {
+  if (!isAdmin()) { alert(DENY); return; }
+  const rd = new FileReader();
+  rd.onload = (e) => {
+    let d;
+    try { d = JSON.parse(e.target.result); } catch (err) { alert("That file isn't a valid backup (couldn't read it)."); return; }
+    if (!d || !Array.isArray(d.entries) || !Array.isArray(d.users)) {
+      alert("That doesn't look like a Collectives backup — it's missing the users or departures."); return;
+    }
+    if (!confirm(`Restore this backup?\n\nIt REPLACES everything currently in the app with:\n• ${d.users.length} users\n• ${d.entries.length} departures`)) return;
+    DB = migrateUsers(d);
+    DB.entries = DB.entries.map(migrateEntry).filter(Boolean);
+    const adminU = DB.users.find((u) => u.role === "admin" && hasCreds(u)) || DB.users.find((u) => u.role === "admin");
+    if (adminU) DB.currentUserId = adminU.id;
+    save();
+    editing = false; sel = { id: null, pkg: null, q: "" }; statsPkg = null;
+    renderWho(); renderTree(); renderEditor(); renderSettings();
+    alert(`Restored ${DB.users.length} users and ${DB.entries.length} departures.`);
+  };
+  rd.readAsText(file);
+}
 function switchUser(id) {
   const u = (DB.users || []).find((x) => x.id === id); if (!u) return;
   DB.currentUserId = id; editing = false; save();
@@ -1485,18 +1534,16 @@ function switchUser(id) {
 }
 async function addUser() {
   if (!isAdmin()) { alert(DENY); return; }
-  const name = document.getElementById("nuName").value.trim();
   const un = document.getElementById("nuUser").value.trim();
   const pw = document.getElementById("nuPw").value;
   const role = document.getElementById("nuRole").value;
-  if (!name) { alert("Enter the user's full name."); return; }
   if (!un) { alert("Enter a username — they sign in with it."); return; }
   if (findByUsername(un)) { alert(`The username "${un}" is already taken.`); return; }
   if (pw.length < 6) { alert("Password must be at least 6 characters."); return; }
   const salt = makeSalt();
-  DB.users.push({ id: uid(), name, username: un, role, salt, passHash: await hashPw(pw, salt) });
+  DB.users.push({ id: uid(), name: un, username: un, role, salt, passHash: await hashPw(pw, salt) });
   save(); renderSettings(); renderWho();
-  alert(`Login created for ${name}.\n\nUsername: ${un}\nRole: ${role}\n\nGive them the password you just set — it isn't recoverable, but you can change it any time from the ⚙ menu.`);
+  alert(`Login created for ${un}.\n\nUsername: ${un}\nRole: ${role}\n\nGive them the password you just set — it isn't recoverable, but you can change it any time from the ⚙ menu.`);
 }
 async function changePassword(id) {
   if (!isAdmin()) { alert(DENY); return; }
@@ -1541,6 +1588,8 @@ document.getElementById("settingsBody").addEventListener("click", (ev) => {
   if (ev.target.closest("[data-adduser]")) return addUser();
   if (ev.target.closest("[data-saveapi]")) return saveApiBase();
   if (ev.target.closest("[data-exportcat]")) return exportCatalog();
+  if (ev.target.closest("[data-backup]")) return downloadBackup();
+  if (ev.target.closest("[data-restore]")) { const i = document.getElementById("restoreFile"); if (i) i.click(); return; }
   if (ev.target.closest("[data-copyapi]")) return copyApiEndpoint();
   const ua = ev.target.closest("[data-uaccess]"); if (ua) return changeAccess(ua.dataset.uaccess);
   const up = ev.target.closest("[data-upass]");   if (up) return changePassword(up.dataset.upass);
@@ -1549,6 +1598,7 @@ document.getElementById("settingsBody").addEventListener("click", (ev) => {
 document.addEventListener("click", () => document.querySelectorAll(".umenu").forEach((x) => x.classList.remove("open")));
 document.getElementById("settingsBody").addEventListener("change", (ev) => {
   if (ev.target.id === "switchUser") switchUser(ev.target.value);
+  if (ev.target.id === "restoreFile" && ev.target.files && ev.target.files[0]) { restoreBackup(ev.target.files[0]); ev.target.value = ""; }
 });
 document.getElementById("settingsOvl").addEventListener("click", (ev) => {
   if (ev.target.id === "settingsOvl") closeSettings(); // click the backdrop to close
