@@ -1442,10 +1442,18 @@ function renderSettings() {
         <input type="text" id="apiUrl" readonly value="${esc(apiEndpoint())}" onclick="this.select()"></label>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:2px">
         <button class="btn-lite" data-copyapi="1">📋 Copy URL</button>
-        ${admin ? `<button class="btn-add" data-exportcat="1">⬇ Export catalog file</button>` : ""}
+        ${admin ? `<button class="btn-lite" data-exportcat="1">⬇ Export file</button>` : ""}
         <span class="h" id="apiCopied" style="align-self:center"></span>
       </div>
-      ${admin ? `<label class="f" style="margin-top:10px"><span>Published-at URL (edit only if your repo/username differs)</span>
+      ${admin ? `<div style="margin-top:12px;padding:11px;border:1px solid var(--line);border-radius:9px;background:#F6F9FD">
+        <div style="font-weight:800;font-size:12.5px;color:var(--navy);margin-bottom:3px">⚡ Publish (live update)</div>
+        <p class="h" style="margin:0 0 8px">Push your current data to the API in one click — it goes live in about a minute.
+          Set up once (see <b>API-README.md</b>): add <b>GH_TOKEN</b> and <b>PUBLISH_SECRET</b> in Vercel, then enter the same passphrase here.</p>
+        <label class="f"><span>Publish passphrase (matches PUBLISH_SECRET in Vercel)</span>
+          <input type="password" id="pubSecret" autocomplete="off" value="${esc(DB.publishSecret || "")}"></label>
+        <div style="margin-top:8px"><button class="btn-add" data-publish="1">⬆ Publish to API now</button></div>
+      </div>
+      <label class="f" style="margin-top:10px"><span>Published-at URL (edit only if your repo/username differs)</span>
         <input type="text" id="apiBase" value="${esc(DB.catalogUrl || "")}" placeholder="${esc(PAGES_URL)}">
         <small>Leave blank to use the default shown above.</small></label>
       <div style="margin:2px 0 2px"><button class="btn-lite" data-saveapi="1">Save URL</button></div>` : ""}
@@ -1467,17 +1475,22 @@ function saveApiBase() {
   if (!isAdmin()) { alert(DENY); return; }
   DB.catalogUrl = document.getElementById("apiBase").value.trim(); save(); renderSettings();
 }
-/** The app "generates" the public API: a safe-fields-only catalog file to publish. */
-function exportCatalog() {
-  if (!isAdmin()) { alert(DENY); return; }
+const PUBLISH_URL = "https://jayson-collectives.vercel.app/api/publish";
+/** Build the safe-fields-only catalog from current data (used by export + publish). */
+function buildCatalog() {
   const isoMDY = (s) => { const p = String(s || "").trim().split("/"); if (p.length !== 3) return null; const [m, d, y] = p; if (!m || !d || !y) return null; return String(y).padStart(4, "0") + "-" + String(m).padStart(2, "0") + "-" + String(d).padStart(2, "0"); };
   const travel = (raw) => { const parts = String(raw || "").split(/\s+-\s+/); return { start: isoMDY(parts[0]), end: isoMDY(parts[parts.length - 1]) }; };
-  const rows = DB.entries.filter((e) => !e.voided).map((e) => {
+  return DB.entries.filter((e) => !e.voided).map((e) => {
     const d = derive(e), t = travel(e.travelRaw), left = Math.max(0, d.remaining);
     return { package: e.package || "", tour_code: e.tourCode || "", travel_raw: e.travelRaw || "",
       travel_start: t.start, travel_end: t.end, status: stOf(e), total_slots: d.totalSlots,
       slots_left: left, sold_out: left <= 0, price_per_pax: (e.amountPerPax ?? null) };
   }).sort((a, b) => String(a.travel_start || "").localeCompare(String(b.travel_start || "")));
+}
+/** Download the catalog as a file (manual publish). */
+function exportCatalog() {
+  if (!isAdmin()) { alert(DENY); return; }
+  const rows = buildCatalog();
   const blob = new Blob([JSON.stringify(rows, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -1485,6 +1498,31 @@ function exportCatalog() {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   const s = document.getElementById("apiCopied"); if (s) { s.textContent = "Exported " + rows.length + " departures ✓"; setTimeout(() => (s.textContent = ""), 2400); }
+}
+/** One-click publish: send the catalog to the Vercel function, which updates the live API. */
+async function publishToApi() {
+  if (!isAdmin()) { alert(DENY); return; }
+  const secret = (document.getElementById("pubSecret") ? document.getElementById("pubSecret").value.trim() : (DB.publishSecret || ""));
+  DB.publishSecret = secret; save();
+  if (!secret) { alert("Enter your publish passphrase first — the one you set in Vercel (PUBLISH_SECRET)."); return; }
+  const rows = buildCatalog();
+  const s = document.getElementById("apiCopied"); if (s) s.textContent = "Publishing…";
+  try {
+    const res = await fetch(PUBLISH_URL, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ secret, catalog: rows }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok) {
+      if (s) { s.textContent = "Published " + data.count + " ✓ — live in ~1 min"; setTimeout(() => (s.textContent = ""), 5000); }
+    } else {
+      if (s) s.textContent = "";
+      alert("Publish failed: " + (data.error || ("HTTP " + res.status)));
+    }
+  } catch (e) {
+    if (s) s.textContent = "";
+    alert("Couldn't reach the publish service.\n\nMake sure the app is deployed on Vercel and PUBLISH_SECRET + GH_TOKEN are set there.");
+  }
 }
 function copyApiEndpoint() {
   const url = apiEndpoint();
@@ -1589,6 +1627,7 @@ document.getElementById("settingsBody").addEventListener("click", (ev) => {
   if (ev.target.closest("[data-adduser]")) return addUser();
   if (ev.target.closest("[data-saveapi]")) return saveApiBase();
   if (ev.target.closest("[data-exportcat]")) return exportCatalog();
+  if (ev.target.closest("[data-publish]")) return publishToApi();
   if (ev.target.closest("[data-backup]")) return downloadBackup();
   if (ev.target.closest("[data-restore]")) { const i = document.getElementById("restoreFile"); if (i) i.click(); return; }
   if (ev.target.closest("[data-copyapi]")) return copyApiEndpoint();

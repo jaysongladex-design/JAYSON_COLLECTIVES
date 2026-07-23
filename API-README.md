@@ -75,7 +75,35 @@ const rows = await (await fetch("https://jaysongladex-design.github.io/JAYSON_CO
 
 ## Live vs snapshot
 
-This is a **snapshot** — simple, keyless, on your own domain, but you refresh it
-by exporting + publishing. If you later want it to **update automatically** the
-instant data changes, that's the Supabase route (`collectives-api.sql` +
-`collectives-api-function.ts`), which is kept in this repo as the alternative.
+This is a **snapshot** — keyless, on your own domain. You refresh it either by
+exporting the file, or with one click via the **Publish** button (below).
+
+## One-click Publish (near-live)
+
+The app's **Settings → Public API → ⚡ Publish** button pushes your current data
+to the API — it goes live about a minute later. It works through `api/publish.js`
+(a Vercel function) so no secret ever touches the app.
+
+**Set up once:**
+
+1. **Create a GitHub token** (so the function can update the file):
+   GitHub → Settings → Developer settings → **Fine-grained tokens** → Generate.
+   - Repository access: only **JAYSON_COLLECTIVES**
+   - Permissions → Repository → **Contents: Read and write**
+   - Copy the token (starts `github_pat_…`).
+2. **Add two settings in Vercel** → Project → Settings → Environment Variables:
+   - `GH_TOKEN` = the token from step 1
+   - `PUBLISH_SECRET` = any passphrase you make up (e.g. a long random phrase)
+   - Tick **Production**, Save.
+3. **Redeploy** in Vercel (Deployments → ⋯ → Redeploy) so the settings take effect.
+4. In the app → **Settings → Public API**, type the **same** `PUBLISH_SECRET`
+   passphrase into the Publish passphrase box.
+
+Now click **⬆ Publish to API now** whenever you want the API to catch up to your
+data. The token stays in Vercel; the passphrase stops anyone else from publishing.
+
+## Fully-automatic alternative
+
+If you'd rather it update the **instant** you change data (no button), that's the
+Supabase route (`collectives-api.sql` + `collectives-api-function.ts`), kept in
+this repo as the bigger alternative.
