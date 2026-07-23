@@ -259,8 +259,8 @@
     "travel_end": "2026-08-10",
     "status": "PENDING",
     "total_slots": 16,
-    "slots_left": 1,
-    "sold_out": false,
+    "slots_left": 0,
+    "sold_out": true,
     "price_per_pax": null
   },
   {
