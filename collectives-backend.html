@@ -1101,6 +1101,7 @@ const stClass = (s) => (s === "VOID" ? "st-void" : s === "FINISHED" ? "st-finish
 const parseD = (s) => (s ? new Date(s + "T00:00:00") : null);
 const daysBetween = (a, b) => Math.max(0, Math.round((b - a) / 86400000));
 const todayISO = () => new Date().toISOString().slice(0, 10);
+const fmtDate = (d) => (d instanceof Date && !isNaN(d)) ? d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "";
 
 /* ============================== store ============================== */
 const ADMIN_ID = "u-admin-default";
