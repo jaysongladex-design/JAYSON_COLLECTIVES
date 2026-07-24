@@ -293,6 +293,7 @@
   </div>
   <div class="actions">
     <span class="saved" id="saveStatus"><i class="dot"></i> Saved</span>
+    <span class="saved" id="cloudStatus"></span>
     <button class="btn" onclick="exportCSV()">⤓ Export CSV</button>
     <button class="btn" onclick="exportPayments()">⤓ Payments CSV</button>
     <button class="btn admin-only" onclick="document.getElementById('csvInput').click()">⬆ Import CSV</button>
@@ -1194,6 +1195,39 @@ function save() {
   } catch (e) {
     document.getElementById("saveStatus").innerHTML = '<i class="dot" style="background:#D9534F"></i> Save failed';
   }
+  scheduleCloudSave();
+}
+
+/* ===== cloud sync: the whole app document lives in Supabase via /api/state ===== */
+const STATE_URL = "https://jayson-collectives.vercel.app/api/state";
+const STATE_SECRET_KEY = "gladex_state_secret_v1";
+const getStateSecret = () => { try { return localStorage.getItem(STATE_SECRET_KEY) || ""; } catch (e) { return ""; } };
+const setStateSecret = (s) => { try { s ? localStorage.setItem(STATE_SECRET_KEY, s) : localStorage.removeItem(STATE_SECRET_KEY); } catch (e) {} };
+let cloudTimer = null;
+function setCloud(state) {
+  const el = document.getElementById("cloudStatus"); if (!el) return;
+  const map = { saving: ["#E1A128", "☁ Syncing…"], saved: ["#1FA971", "☁ Synced"], error: ["#D9534F", "☁ Sync failed — saved on this device"] };
+  const m = map[state];
+  el.innerHTML = m ? `<i class="dot" style="background:${m[0]}"></i> ${m[1]}` : "";
+}
+async function serverLoad(secret) {
+  const r = await fetch(STATE_URL, { headers: { "x-state-secret": secret } });
+  if (r.status === 401) { const e = new Error("bad secret"); e.code = 401; throw e; }
+  if (!r.ok) { const e = new Error("load " + r.status); e.code = r.status; throw e; }
+  return await r.json(); // { ok, data, updated_at } — data is null if server is empty
+}
+async function serverSave() {
+  const secret = getStateSecret(); if (!secret) return;
+  try {
+    const r = await fetch(STATE_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ secret, data: DB }) });
+    setCloud(r.ok ? "saved" : "error");
+  } catch (e) { setCloud("error"); }
+}
+function scheduleCloudSave() {
+  if (!getStateSecret()) return;   // not connected -> local only
+  setCloud("saving");
+  clearTimeout(cloudTimer);
+  cloudTimer = setTimeout(serverSave, 800);
 }
 
 /* ============================== derive ============================== */
@@ -1336,9 +1370,12 @@ function signOut() {
 document.getElementById("authCard").addEventListener("click", (ev) => {
   if (ev.target.closest("[data-setup]")) return doSetup();
   if (ev.target.closest("[data-login]")) return doLogin();
+  if (ev.target.closest("[data-connect]")) return doConnect();
+  if (ev.target.closest("[data-offline]")) return renderGate(); // work on this device only
 });
 document.getElementById("authCard").addEventListener("keydown", (ev) => {
   if (ev.key !== "Enter") return;
+  if (document.getElementById("cSecret")) return doConnect();
   if (document.getElementById("sPw")) doSetup(); else doLogin();
 });
 
@@ -2328,12 +2365,84 @@ document.addEventListener("click", () => { if (statsOpen) { statsOpen = false; r
 
 /* ============================== boot ============================== */
 // Nothing renders until someone signs in. On first run, the admin account is created here.
-(function bootAuth() {
+/* ===== boot: connect to your data (server), then sign in ===== */
+function startAuth() {
   let sid = null;
   try { sid = sessionStorage.getItem(SESSION_KEY); } catch (e) {}
   const u = sid ? (DB.users || []).find((x) => x.id === sid && hasCreds(x)) : null;
   if (!needsSetup() && u) { DB.currentUserId = u.id; openApp(); return; }
   renderGate();
+}
+/** Replace local data with the server's (server is the source of truth). Returns false if server was empty. */
+function adoptRemote(remote) {
+  if (remote && Array.isArray(remote.entries)) {
+    remote.entries = remote.entries.map(migrateEntry).filter(Boolean);
+    DB = migrateUsers(remote);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); } catch (e) {}
+    return true;
+  }
+  return false;
+}
+/** Decide server vs local by which is newer. Returns "push" if local should be sent up. */
+function applyServer(payload) {
+  const data = payload && payload.data;
+  if (data && Array.isArray(data.entries)) {
+    const localTime = (DB && DB.updatedAt) || "";
+    const serverTime = (payload.updated_at) || "";
+    if (serverTime >= localTime) { adoptRemote(data); return "adopted"; } // server newer/equal -> use it
+    // local is newer (unsynced edits) -> keep local, push it up
+  }
+  return "push"; // server empty, or local is newer
+}
+function renderConnect(msg) {
+  const gate = document.getElementById("authGate");
+  const card = document.getElementById("authCard");
+  gate.classList.remove("hidden");
+  card.innerHTML = `
+    <div class="gate-logo">CF</div>
+    <div class="gate-brand">Collectives Finance</div>
+    <h2>Connect to your data</h2>
+    <div class="g-sub">Enter your access passphrase to load your data. The same passphrase on any device or browser shows the same data.</div>
+    <div class="gate-err" id="gErr"></div>
+    <label class="f"><span>Access passphrase</span><input type="password" id="cSecret" autocomplete="off"></label>
+    <button class="gate-btn" data-connect="1">Connect</button>
+    <button class="gate-btn" data-offline="1" style="background:#5a6b7d;margin-top:8px">Use this device only (offline)</button>
+    ${gateNote}`;
+  if (msg) gateErr(msg);
+  setTimeout(() => { const i = document.getElementById("cSecret"); if (i) i.focus(); }, 40);
+}
+async function doConnect() {
+  const secret = document.getElementById("cSecret").value.trim();
+  if (!secret) return gateErr("Enter your access passphrase.");
+  const btn = document.querySelector("[data-connect]");
+  if (btn) { btn.disabled = true; btn.textContent = "Connecting…"; }
+  try {
+    const payload = await serverLoad(secret);
+    setStateSecret(secret);
+    if (applyServer(payload) === "push") await serverSave();   // server empty/older -> seed from this device
+    setCloud("saved");
+    startAuth();
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = "Connect"; }
+    if (e.code === 401) return gateErr("That passphrase doesn't match. Try again.");
+    return gateErr("Couldn't reach the server. Check your connection, or use offline mode.");
+  }
+}
+(async function boot() {
+  const secret = getStateSecret();
+  if (!secret) { renderConnect(); return; }           // first time on this browser -> connect
+  document.getElementById("authGate").classList.remove("hidden");
+  document.getElementById("authCard").innerHTML =
+    `<div class="gate-logo">CF</div><div class="gate-brand">Collectives Finance</div><div class="g-sub" style="margin-top:14px">Loading your data…</div>`;
+  try {
+    const payload = await serverLoad(secret);
+    if (applyServer(payload) === "push") await serverSave();   // seed/update server from this device
+    setCloud("saved");
+    startAuth();
+  } catch (e) {
+    if (e.code === 401) { setStateSecret(""); renderConnect("Your saved passphrase was rejected — enter it again."); return; }
+    setCloud("error"); startAuth();                    // offline: fall back to local data
+  }
 })();
 console.log("[back office] entries:", DB.entries.length);
 </script>
