@@ -1914,6 +1914,21 @@ function renderEditor() {
       </div>
     </section>
 
+    ${(isAdmin() && !(e.payments || []).length && !(e.sales || []).length) ? `
+    <section class="card" style="border:1.5px solid var(--gold)">
+      <h3>Opening figures (optional)</h3>
+      <p class="sub">Creating a departure that <b>already has history</b>? Enter what's happened so far <b>once</b> — I'll
+        record it as an opening payment + an opening sale. This box disappears once anything is logged below.</p>
+      <div class="pay-form">
+        <label class="f"><span>Already paid to supplier</span><input type="number" step="any" id="oPaid" placeholder="0.00"></label>
+        <label class="f"><span># slots already sold</span><input type="number" step="1" min="0" id="oSlots" placeholder="0"></label>
+        <label class="f"><span>Collected from pax</span><input type="number" step="any" id="oColl" placeholder="0.00"></label>
+        <label class="f"><span>As of date</span><input type="date" id="oDate" value="${esc(e.holdingDate || todayISO())}"></label>
+        <button class="btn-add" data-openingfill="1">Record opening figures</button>
+      </div>
+      <small class="h" style="display:block;margin-top:6px">Tip: set <b>Total Cost</b> and <b>Slot / FOC</b> in Details first — the paid amount can't exceed the cost, and slots sold can't exceed total slots.</small>
+    </section>` : ""}
+
     <section class="card">
       <h3>Payments to Supplier</h3>
       <p class="sub">Add each payment as its own entry — Current Payment and Balance Payable update automatically.</p>
@@ -2088,6 +2103,27 @@ function deleteSale(sid) {
   e.sales = (e.sales || []).filter((s) => s.id !== sid);
   save(); renderEditor(); renderTree();
 }
+/** Opening figures on a fresh tour code: records an opening payment + opening sale in one go. */
+function recordOpening() {
+  if (!isAdmin()) { alert(DENY); return; }
+  const e = current(); if (!e) return;
+  if ((e.payments || []).length || (e.sales || []).length) { alert("This tour code already has entries — add them below instead."); return; }
+  const paid = Number(document.getElementById("oPaid").value) || 0;
+  const slots = Math.round(Number(document.getElementById("oSlots").value) || 0);
+  const coll = Number(document.getElementById("oColl").value) || 0;
+  const date = document.getElementById("oDate").value || todayISO();
+  if (paid <= 0 && slots <= 0 && coll <= 0) { alert("Enter at least one opening figure — paid, slots sold, or collected."); return; }
+  if (paid < 0 || slots < 0 || coll < 0) { alert("Figures can't be negative."); return; }
+
+  const totalSlots = num(e.slot) + num(e.foc);
+  if (slots > totalSlots) { alert(`Slots sold (${slots}) can't exceed total slots (${totalSlots}).\n\nSet Slot + FOC in Details first.`); return; }
+  if (paid > num(e.totalCost) + CENT) { alert(`Already paid (${money(paid)}) can't exceed Total Cost (${money(e.totalCost)}).\n\nSet the Total Cost in Details first.`); return; }
+
+  e.payments = e.payments || []; e.sales = e.sales || [];
+  if (paid > 0) e.payments.push({ id: uid(), date, amount: paid, note: "Opening balance" });
+  if (slots > 0 || coll > 0) e.sales.push({ id: uid(), date, slots, amount: coll, note: "Opening balance" });
+  save(); renderEditor(); renderTree();
+}
 function resetAll() {
   if (!isAdmin()) { alert(DENY); return; }
   if (!confirm("Discard ALL your edits and reload the original data from the uploaded file?\n\nThis cannot be undone.")) return;
@@ -2249,6 +2285,7 @@ document.getElementById("editor").addEventListener("click", (ev) => {
   }
   if (ev.target.closest("[data-addpay]")) return addPayment();
   if (ev.target.closest("[data-addsale]")) return addSale();
+  if (ev.target.closest("[data-openingfill]")) return recordOpening();
   const dp = ev.target.closest("[data-delpay]");
   if (dp) return deletePayment(dp.dataset.delpay);
   const ds = ev.target.closest("[data-delsale]");
