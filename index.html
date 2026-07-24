@@ -1811,6 +1811,10 @@ function openPkgCfg(pkg) {
     <div style="display:flex;gap:8px;margin-top:16px">
       <button class="btn-add" data-pkgsave="1">Save</button>
       <button class="btn-lite" onclick="closePkgCfg()">Cancel</button>
+    </div>
+    <div style="border-top:1px solid var(--line);margin-top:16px;padding-top:12px">
+      <button data-pkgdelete="1" style="background:#C0453B;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:700;font-size:12.5px;cursor:pointer">🗑 Delete package${count ? ` (${count} departure${count === 1 ? "" : "s"})` : ""}</button>
+      <small class="h" style="display:block;margin-top:7px">Removes this package and <b>all</b> its tour codes, payments and slots-sold history. Can't be undone — back up first (Settings → Download backup).</small>
     </div>`;
   document.getElementById("pkgOvl").classList.add("open");
   setTimeout(() => { const i = document.getElementById("pkgName"); if (i) { i.focus(); i.select(); } }, 40);
@@ -1839,6 +1843,20 @@ function savePkgCfg() {
   if (clearColor) delete DB.packageColors[newName];
   else DB.packageColors[newName] = color;
   save(); closePkgCfg(); renderTree(); renderEditor();
+}
+function deletePackage() {
+  if (!isAdmin()) { alert(DENY); return; }
+  const pkg = pkgCfgTarget; if (pkg == null) return;
+  const inPkg = DB.entries.filter((e) => e.package === pkg);
+  const count = inPkg.length;
+  if (!confirm(`Delete the package "${pkg}"?\n\nThis permanently removes ${count} tour code${count === 1 ? "" : "s"} and all their payments and slots-sold history.\n\nThis cannot be undone.`)) return;
+  if (count > 0 && !confirm(`Last check — really delete "${pkg}" and its ${count} departure${count === 1 ? "" : "s"} for good?`)) return;
+  DB.entries = DB.entries.filter((e) => e.package !== pkg);
+  if (DB.packageColors) delete DB.packageColors[pkg];
+  if (sel.pkg === pkg) sel.pkg = null;
+  if (sel.id && !DB.entries.some((e) => e.id === sel.id)) sel.id = null;
+  if (statsPkg === pkg) statsPkg = null;
+  save(); closePkgCfg(); renderStatsDD(); renderTree(); renderEditor();
 }
 
 /* ============================== editor ============================== */
@@ -2230,6 +2248,7 @@ document.getElementById("pkgBody").addEventListener("click", (ev) => {
     return;
   }
   if (ev.target.closest("[data-pkgsave]")) return savePkgCfg();
+  if (ev.target.closest("[data-pkgdelete]")) return deletePackage();
 });
 document.getElementById("pkgBody").addEventListener("input", (ev) => {
   if (ev.target.id === "pkgColor") document.getElementById("pkgBody").dataset.clear = "0"; // picking a color un-clears
