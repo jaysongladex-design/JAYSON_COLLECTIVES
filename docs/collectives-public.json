@@ -12,6 +12,30 @@
     "price_per_pax": null
   },
   {
+    "package": "BORACAY 4D3N JULY 3-6, 2026",
+    "tour_code": "A",
+    "travel_raw": "JULY 3-6, 2026",
+    "travel_start": null,
+    "travel_end": null,
+    "status": "FINISHED",
+    "total_slots": 20,
+    "slots_left": 20,
+    "sold_out": false,
+    "price_per_pax": 10811.26
+  },
+  {
+    "package": "BORACAY 4D3N JULY 3-6, 2026",
+    "tour_code": "",
+    "travel_raw": "",
+    "travel_start": null,
+    "travel_end": null,
+    "status": "PENDING",
+    "total_slots": 0,
+    "slots_left": 0,
+    "sold_out": true,
+    "price_per_pax": null
+  },
+  {
     "package": "5D3N Da Nang Charter (VJ VietJet)",
     "tour_code": "UOV24B2 - A",
     "travel_raw": "1/14/2026 - 1/17/2026",
@@ -259,8 +283,8 @@
     "travel_end": "2026-08-10",
     "status": "PENDING",
     "total_slots": 16,
-    "slots_left": 0,
-    "sold_out": true,
+    "slots_left": 1,
+    "sold_out": false,
     "price_per_pax": null
   },
   {
