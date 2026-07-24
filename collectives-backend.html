@@ -80,6 +80,11 @@
   .pkg-head .pkg-btn{flex:1;min-width:0}
   .pkg-gear{flex:none;background:#F6F9FD;border:1px solid var(--line);border-radius:9px;padding:0 10px;cursor:pointer;font-size:13px;color:var(--muted)}
   .pkg-gear:hover{background:#EDF3FA;color:var(--navy)}
+  .pkg-grip{flex:none;display:flex;align-items:center;justify-content:center;padding:0 5px;color:var(--muted);cursor:grab;font-size:15px;user-select:none;line-height:1}
+  .pkg-grip:active{cursor:grabbing}
+  .pkg.dragging{opacity:.45}
+  .pkg.drop-before{box-shadow:0 -3px 0 0 var(--blue)}
+  .pkg.drop-after{box-shadow:0 3px 0 0 var(--blue)}
   .pkgdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle;flex:none}
   .swatches{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}
   .sw{width:27px;height:27px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--line);cursor:pointer;padding:0}
@@ -1798,12 +1803,19 @@ function packagesOf(entries) {
   entries.forEach((e) => { const k = e.package || "(no package)"; if (!m.has(k)) m.set(k, []); m.get(k).push(e); });
   return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 }
+/** Reorder package groups by the saved custom order; unlisted ones stay alphabetical, at the end. */
+function orderedGroups(groups) {
+  const order = Array.isArray(DB.packageOrder) ? DB.packageOrder : [];
+  const rank = (p) => { const i = order.indexOf(p); return i === -1 ? Infinity : i; };
+  return groups.slice().sort((a, b) => { const d = rank(a[0]) - rank(b[0]); return d !== 0 ? d : a[0].localeCompare(b[0]); });
+}
 function renderTree() {
   const q = sel.q.trim().toLowerCase();
   const match = (e) => !q || (e.package || "").toLowerCase().includes(q) || (e.tourCode || "").toLowerCase().includes(q);
   const visible = DB.entries.filter(match);
   renderStatsDD();
-  const groups = packagesOf(visible);
+  const groups = orderedGroups(packagesOf(visible));
+  const dragOn = isAdmin() && !q; // reordering only when not filtering by search
   const host = document.getElementById("tree");
   if (!groups.length) { host.innerHTML = '<div class="empty">No matches.</div>'; return; }
   host.innerHTML = groups.map(([pkg, list]) => {
@@ -1816,8 +1828,9 @@ function renderTree() {
       }).join("")}
       ${isAdmin() ? `<button class="add-btn" data-newcode="${esc(pkg)}">＋ New Tour Code</button>` : ""}</div>` : "";
     const color = pkgColor(pkg);
-    return `<div class="pkg"${color ? ` style="border-left:4px solid ${esc(color)};border-radius:9px"` : ""}>
-        <div class="pkg-head">
+    return `<div class="pkg" data-pkgname="${esc(pkg)}"${color ? ` style="border-left:4px solid ${esc(color)};border-radius:9px"` : ""}>
+        <div class="pkg-head"${dragOn ? ' draggable="true"' : ""}>
+          ${dragOn ? `<span class="pkg-grip" title="Drag to reorder">⠿</span>` : ""}
           <button class="pkg-btn" data-pkg="${esc(pkg)}">
             <span>${color ? `<i class="pkgdot" style="background:${esc(color)}"></i>` : ""}${esc(pkg)}</span>
             <span><span class="cnt">${list.length}</span> <span class="chev">${open ? "▾" : "▸"}</span></span>
@@ -2276,6 +2289,54 @@ document.getElementById("tree").addEventListener("click", (ev) => {
   const addBtn = ev.target.closest("[data-newcode]");
   if (addBtn) { newEntry(addBtn.dataset.newcode); return; }
 });
+
+/* ===== drag to reorder packages (admin) ===== */
+let dragPkg = null;
+function allOrderedNames() { return orderedGroups(packagesOf(DB.entries)).map((g) => g[0]); }
+function movePackage(dragged, target, after) {
+  if (!isAdmin() || !dragged || !target || dragged === target) return;
+  let names = allOrderedNames().filter((n) => n !== dragged);
+  let i = names.indexOf(target);
+  if (i === -1) i = names.length;
+  names.splice(after ? i + 1 : i, 0, dragged);
+  DB.packageOrder = names;
+  save(); renderTree();
+}
+const clearDropCues = () => document.querySelectorAll(".pkg.drop-before,.pkg.drop-after").forEach((x) => x.classList.remove("drop-before", "drop-after"));
+const treeEl = document.getElementById("tree");
+treeEl.addEventListener("dragstart", (ev) => {
+  const head = ev.target.closest('.pkg-head[draggable="true"]'); if (!head) return;
+  const pkg = head.closest(".pkg"); dragPkg = pkg ? pkg.dataset.pkgname : null;
+  if (!dragPkg) return;
+  ev.dataTransfer.effectAllowed = "move";
+  try { ev.dataTransfer.setData("text/plain", dragPkg); } catch (e) {}
+  pkg.classList.add("dragging");
+});
+treeEl.addEventListener("dragover", (ev) => {
+  if (!dragPkg) return;
+  const pkgEl = ev.target.closest(".pkg"); if (!pkgEl || pkgEl.dataset.pkgname === dragPkg) return;
+  ev.preventDefault();
+  const rect = pkgEl.getBoundingClientRect();
+  const after = ev.clientY - rect.top > rect.height / 2;
+  clearDropCues();
+  pkgEl.classList.add(after ? "drop-after" : "drop-before");
+});
+treeEl.addEventListener("drop", (ev) => {
+  if (!dragPkg) return;
+  const pkgEl = ev.target.closest(".pkg"); if (!pkgEl) return;
+  ev.preventDefault();
+  const target = pkgEl.dataset.pkgname;
+  if (target && target !== dragPkg) {
+    const rect = pkgEl.getBoundingClientRect();
+    movePackage(dragPkg, target, ev.clientY - rect.top > rect.height / 2);
+  }
+  dragPkg = null; clearDropCues();
+});
+treeEl.addEventListener("dragend", () => {
+  dragPkg = null; clearDropCues();
+  document.querySelectorAll(".pkg.dragging").forEach((x) => x.classList.remove("dragging"));
+});
+
 document.getElementById("pkgBody").addEventListener("click", (ev) => {
   const sw = ev.target.closest("[data-sw]");
   if (sw) {
