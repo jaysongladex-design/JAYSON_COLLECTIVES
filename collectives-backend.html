@@ -2112,10 +2112,10 @@ function renderBookings() {
           <label class="f"><span>SRP (total collectible)</span><input data-bk="${b.id}" data-bkf="srp" type="number" step="any" value="${esc(b.srp ?? 0)}"></label>
           <label class="f"><span>Payment type</span><select data-bk="${b.id}" data-bkf="paymentType"><option value="full"${b.paymentType === "full" ? " selected" : ""}>Full Payment</option><option value="installment"${b.paymentType === "installment" ? " selected" : ""}>Installment</option></select></label>
         </div>
-        <label class="f" style="margin-top:9px"><span>Booking Ref / Account</span>
+        <label class="f" style="margin-top:9px"><span>Fusio #</span>
           <div style="display:flex;gap:6px">
-            <select data-bk="${b.id}" data-bkf="refCode" style="flex:0 0 96px;width:96px"><option value=""${!b.refCode ? " selected" : ""}>—</option>${REF_CODES.map((c) => `<option value="${c}"${b.refCode === c ? " selected" : ""}>${c}</option>`).join("")}</select>
-            <input data-bk="${b.id}" data-bkf="refNum" type="text" value="${esc(b.refNum || "")}" placeholder="number" style="flex:1">
+            <select data-bk="${b.id}" data-bkf="refCode" style="flex:0 0 92px;width:92px"><option value=""${!b.refCode ? " selected" : ""}>—</option>${REF_CODES.map((c) => `<option value="${c}"${b.refCode === c ? " selected" : ""}>${c}</option>`).join("")}</select>
+            <input data-bk="${b.id}" data-bkf="refNum" type="text" inputmode="numeric" maxlength="6" value="${esc(b.refNum || "")}" placeholder="6-digit #" style="flex:0 0 120px;width:120px">
           </div>
         </label>
         <div class="sub" style="margin:9px 0 4px">Guest / Passenger List (${guests.length} of ${num(b.pax)})</div>
@@ -2270,6 +2270,11 @@ function updateBookingField(id, field, value, commit) {
     if (commit) renderBookings();                          // refresh balance/status on blur
   } else if (field === "paymentType") {
     b.paymentType = value; save();
+  } else if (field === "refNum") {
+    const clean = String(value).replace(/\D/g, "").slice(0, 6); // digits only, max 6
+    b.refNum = clean; save();
+    const inp = document.querySelector(`[data-bk="${id}"][data-bkf="refNum"]`);
+    if (inp && inp.value !== clean) inp.value = clean;
   } else {
     b[field] = value; save();
     if (field === "fbName") renderTree();
