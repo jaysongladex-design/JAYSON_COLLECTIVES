@@ -273,6 +273,18 @@
   .pay-form .btn-add{align-self:end}
   @media(max-width:700px){ .pay-form{grid-template-columns:1fr} }
   .pay-form input{padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;width:100%}
+  .booking{border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:#fff}
+  .b-head{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;flex-wrap:wrap}
+  .b-head:hover{background:#F6F9FD}
+  .b-name{font-weight:800;color:var(--navy);flex:1;min-width:110px}
+  .b-meta{font-size:12px;color:var(--muted)}
+  .b-bal{font-size:12px;font-weight:700;color:var(--navy)}
+  .b-body{padding:2px 12px 14px;border-top:1px solid var(--line)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}
+  @media(max-width:640px){ .grid2{grid-template-columns:1fr} }
+  label.f.gf{flex-direction:row;align-items:center;gap:8px;margin-bottom:5px}
+  label.f.gf>span{min-width:22px;text-align:right;font-size:12px}
+  label.f.gf>input{flex:1}
   .btn-add{background:var(--navy);color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:700;font-size:12.5px;cursor:pointer;white-space:nowrap}
   .btn-add:hover{background:var(--navy2)}
   .btn-x{background:none;border:none;color:var(--red);cursor:pointer;font-weight:800;font-size:14px;padding:2px 6px;border-radius:5px}
@@ -1159,7 +1171,27 @@ function migrateEntry(e) {
       ? [{ id: uid(), date: e.holdingDate || "", slots, amount, note: "Opening sale (imported from file)" }]
       : [];
   }
-  delete e.slotSold; delete e.collected; // now derived from e.sales
+  delete e.slotSold; delete e.collected; // now derived from bookings
+  // sales[] -> bookings[] (Facebook Name / booking-owner tracker)
+  if (!Array.isArray(e.bookings)) {
+    e.bookings = (Array.isArray(e.sales) ? e.sales : []).map((s) => ({
+      id: s.id || uid(),
+      fbName: s.note || "",
+      pax: num(s.slots),
+      srp: num(s.amount),                 // old "collected" becomes the collectible total
+      paymentType: "full",
+      guests: [],
+      payments: num(s.amount) ? [{ id: uid(), date: s.date || "", amount: num(s.amount), note: "Imported" }] : [],
+      remarks: "",
+    }));
+  }
+  e.bookings.forEach((b) => {            // keep the guest list length == pax
+    if (!Array.isArray(b.guests)) b.guests = [];
+    if (!Array.isArray(b.payments)) b.payments = [];
+    const n = Math.max(0, num(b.pax));
+    if (b.guests.length < n) while (b.guests.length < n) b.guests.push("");
+    else if (b.guests.length > n) b.guests.length = n;
+  });
   return e;
 }
 /** Ensure the users/roles block exists and stays coherent (never zero admins). */
@@ -1236,11 +1268,17 @@ function scheduleCloudSave() {
 }
 
 /* ============================== derive ============================== */
+/* ===== per-booking (Facebook Name) helpers ===== */
+const bkPaid = (b) => (b && b.payments || []).reduce((s, p) => s + num(p.amount), 0);
+const bkBalance = (b) => num(b && b.srp) - bkPaid(b);
+const bkStatus = (b) => { const paid = bkPaid(b), srp = num(b && b.srp); if (paid <= 0) return "Unpaid"; return paid + CENT >= srp ? "Fully Paid" : "Partially Paid"; };
+const bkClass = (s) => (s === "Fully Paid" ? "st-finished" : s === "Partially Paid" ? "st-pending" : "st-void");
 function derive(e) {
   const totalSlots = num(e.slot) + num(e.foc);
   const paid = (e.payments || []).reduce((s, p) => s + num(p.amount), 0);
-  const slotSold = (e.sales || []).reduce((s, x) => s + num(x.slots), 0);
-  const collected = (e.sales || []).reduce((s, x) => s + num(x.amount), 0);
+  const bookings = Array.isArray(e.bookings) ? e.bookings : [];
+  const slotSold = bookings.reduce((s, b) => s + num(b.pax), 0);
+  const collected = bookings.reduce((s, b) => s + bkPaid(b), 0);
   const balance = num(e.totalCost) - paid;
   const remaining = totalSlots - slotSold;
   const profit = collected - paid;
@@ -2014,18 +2052,18 @@ function renderEditor() {
     </section>
 
     <section class="card">
-      <h3>Slots Sold</h3>
-      <p class="sub">Log each sale — Slot Sold, Remaining Slot and Collected from Pax update automatically.</p>
-      <div id="sales"></div>
+      <h3>Bookings — Facebook Names</h3>
+      <p class="sub">Each booking owner: pax, guest list, SRP (collectible) and payments. Slot Sold, Remaining and Collected update automatically.</p>
+      <div id="bookings"></div>
       ${d.remaining > 0
-        ? `<div class="pay-form">
-             <label class="f"><span>Date</span><input type="date" id="sDate" value="${todayISO()}"></label>
-             <label class="f"><span>Slots</span><input type="number" id="sSlots" min="1" max="${d.remaining}" step="1" value="1"></label>
-             <label class="f"><span>Amount Collected</span><input type="number" step="any" id="sAmount" placeholder="0.00"></label>
-             <label class="f"><span>Note</span><input type="text" id="sNote" placeholder="e.g. pax name / booking ref"></label>
-             <button class="btn-add" data-addsale="1">＋ Add Sale</button>
+        ? `<div class="pay-form bk-add">
+             <label class="f"><span>Facebook Name</span><input type="text" id="bkName" placeholder="e.g. Juan Dela Cruz"></label>
+             <label class="f"><span>Pax availed</span><input type="number" id="bkPax" min="1" max="${d.remaining}" step="1" value="1"></label>
+             <label class="f"><span>SRP (total collectible)</span><input type="number" step="any" id="bkSrp" placeholder="0.00"></label>
+             <label class="f"><span>Payment type</span><select id="bkType"><option value="full">Full Payment</option><option value="installment">Installment</option></select></label>
+             <button class="btn-add" data-addbooking="1">＋ Add Booking</button>
            </div>`
-        : `<div class="full">✔ Fully booked — all ${d.totalSlots} slots sold. No slots available to add.</div>`}
+        : `<div class="full">✔ Fully booked — all ${d.totalSlots} slots availed. No slots left for a new booking.</div>`}
     </section>
 
     <section class="card">
@@ -2038,27 +2076,59 @@ function renderEditor() {
         Per Day = Slot Sold ÷ selling days (Holding→Sold Out, or Holding→today).</div>
     </section>`;
   renderPayments();
-  renderSales();
+  renderBookings();
   renderDerived();
 }
 
-function renderSales() {
+let expandedBk = new Set();
+function renderBkPayments(b) {
+  const rows = (b.payments || []).slice().sort((a, c) => String(a.date).localeCompare(String(c.date)));
+  if (!rows.length) return `<div class="empty">No payments yet.</div>`;
+  const total = rows.reduce((s, p) => s + num(p.amount), 0);
+  return `<table><thead><tr><th>Date</th><th class="num">Amount</th><th>Note</th><th></th></tr></thead>
+    <tbody>${rows.map((p) => `<tr><td>${esc(p.date || "—")}</td><td class="num">${money(p.amount)}</td><td>${esc(p.note || "")}</td>
+      <td style="text-align:right">${isAdmin() ? `<button class="btn-x" data-bkdelpay="${b.id}:${p.id}" title="Delete">✕</button>` : ""}</td></tr>`).join("")}</tbody>
+    <tfoot><tr class="totrow"><td>TOTAL (${rows.length})</td><td class="num">${money(total)}</td><td></td><td></td></tr></tfoot></table>`;
+}
+function renderBookings() {
   const e = current(); if (!e) return;
-  const host = document.getElementById("sales"); if (!host) return;
-  const rows = (e.sales || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  const slots = rows.reduce((s, x) => s + num(x.slots), 0);
-  const amount = rows.reduce((s, x) => s + num(x.amount), 0);
-  host.innerHTML = rows.length
-    ? `<table><thead><tr><th>Date</th><th class="num">Slots</th><th class="num">Collected</th><th>Note</th><th></th></tr></thead>
-       <tbody>${rows.map((x) => `<tr>
-            <td>${esc(x.date || "—")}</td>
-            <td class="num">${qty(x.slots)}</td>
-            <td class="num">${money(x.amount)}</td>
-            <td>${esc(x.note || "")}</td>
-            <td style="text-align:right">${isAdmin() ? `<button class="btn-x" data-delsale="${x.id}" title="Delete sale">✕</button>` : ""}</td>
-          </tr>`).join("")}</tbody>
-       <tfoot><tr class="totrow"><td>TOTAL (${rows.length})</td><td class="num">${qty(slots)}</td><td class="num">${money(amount)}</td><td></td><td></td></tr></tfoot></table>`
-    : `<div class="empty">No sales logged yet. Add the first one below.</div>`;
+  const host = document.getElementById("bookings"); if (!host) return;
+  const bks = e.bookings || [];
+  if (!bks.length) { host.innerHTML = `<div class="empty">No bookings yet. Add the first Facebook Name below.</div>`; return; }
+  host.innerHTML = bks.map((b) => {
+    const paid = bkPaid(b), bal = bkBalance(b), st = bkStatus(b);
+    const open = expandedBk.has(b.id);
+    const guests = b.guests || [];
+    return `<div class="booking">
+      <div class="b-head" data-bktoggle="${b.id}">
+        <span class="b-name">${esc(b.fbName || "(no name)")}</span>
+        <span class="b-meta">${qty(b.pax)} pax · ${money(b.srp)} SRP</span>
+        <span class="b-bal">Bal ${money(bal)}</span>
+        <span class="sttag ${bkClass(st)}">${st}</span>
+        <span class="chev">${open ? "▾" : "▸"}</span>
+      </div>
+      ${open ? `<div class="b-body">
+        <div class="grid2">
+          <label class="f"><span>Facebook Name</span><input data-bk="${b.id}" data-bkf="fbName" type="text" value="${esc(b.fbName || "")}"></label>
+          <label class="f"><span>Pax availed</span><input data-bk="${b.id}" data-bkf="pax" type="number" min="0" step="1" value="${esc(b.pax ?? 0)}"></label>
+          <label class="f"><span>SRP (total collectible)</span><input data-bk="${b.id}" data-bkf="srp" type="number" step="any" value="${esc(b.srp ?? 0)}"></label>
+          <label class="f"><span>Payment type</span><select data-bk="${b.id}" data-bkf="paymentType"><option value="full"${b.paymentType === "full" ? " selected" : ""}>Full Payment</option><option value="installment"${b.paymentType === "installment" ? " selected" : ""}>Installment</option></select></label>
+        </div>
+        <div class="sub" style="margin:9px 0 4px">Guest / Passenger List (${guests.length} of ${num(b.pax)})</div>
+        ${guests.length ? guests.map((g, i) => `<label class="f gf"><span>${i + 1}.</span><input data-bk="${b.id}" data-bkg="${i}" type="text" value="${esc(g || "")}" placeholder="Guest name"></label>`).join("") : `<div class="empty">Set Pax above to add guest name fields.</div>`}
+        <div class="sub" style="margin:11px 0 4px">Payments — Paid <b>${money(paid)}</b> · Balance <b>${money(bal)}</b> · <span class="sttag ${bkClass(st)}">${st}</span></div>
+        <div>${renderBkPayments(b)}</div>
+        <div class="pay-form" style="margin-top:6px">
+          <label class="f"><span>Date</span><input type="date" id="bp-date-${b.id}" value="${todayISO()}"></label>
+          <label class="f"><span>Amount</span><input type="number" step="any" id="bp-amt-${b.id}" placeholder="0.00"></label>
+          <label class="f"><span>Note</span><input type="text" id="bp-note-${b.id}" placeholder="e.g. GCash deposit"></label>
+          <button class="btn-add" data-bkaddpay="${b.id}">＋ Add Payment</button>
+        </div>
+        <label class="f" style="margin-top:9px"><span>Remarks</span><input data-bk="${b.id}" data-bkf="remarks" type="text" value="${esc(b.remarks || "")}" placeholder="optional"></label>
+        ${isAdmin() ? `<div style="margin-top:9px"><button data-bkdel="${b.id}" style="background:#C0453B;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:700;font-size:12px;cursor:pointer">🗑 Delete booking</button></div>` : ""}
+      </div>` : ""}
+    </div>`;
+  }).join("");
 }
 
 function renderPayments() {
@@ -2104,7 +2174,7 @@ function newEntry(pkg) {
   if (!isAdmin()) { alert(DENY); return; }
   const e = { id: uid(), package: pkg || "", tourCode: "", travelRaw: "", holdingDate: "", soldOutDate: "",
     amountPerPax: null, expProfitPerPerson: null, estProfitPerDeparture: null, totalCost: 0,
-    slot: 0, foc: 0, remainingBalanceToCollect: null, payments: [], sales: [] };
+    slot: 0, foc: 0, remainingBalanceToCollect: null, payments: [], bookings: [] };
   DB.entries.push(e); save(); sel.pkg = e.package; selectEntry(e.id);
   editing = true; renderEditor(); // a new entry starts unlocked — there's nothing to protect yet
   setTimeout(() => { const i = document.querySelector('[data-field="tourCode"]'); if (i) i.focus(); }, 40);
@@ -2148,34 +2218,69 @@ function deletePayment(pid) {
   e.payments = (e.payments || []).filter((x) => x.id !== pid);
   save(); renderPayments(); renderDerived(); renderTree();
 }
-function addSale() {
+const bkFind = (id) => { const e = current(); return e ? (e.bookings || []).find((b) => b.id === id) : null; };
+function addBooking() {
   const e = current(); if (!e) return;
   const d = derive(e);
-  const slots = Number(document.getElementById("sSlots").value);
-  const amount = Number(document.getElementById("sAmount").value) || 0;
-  if (!isFinite(slots) || slots <= 0) { alert("Enter how many slots were sold (1 or more)."); return; }
-  if (slots > d.remaining) { alert(`Only ${d.remaining} slot(s) available. Reduce the number of slots.`); return; }
-  if (!isFinite(amount) || amount < 0) { alert("Amount collected can't be negative."); return; }
-  e.sales = e.sales || [];
-  e.sales.push({ id: uid(), date: document.getElementById("sDate").value || todayISO(),
-    slots: Math.round(slots), amount, note: document.getElementById("sNote").value.trim() });
-  save();
-  renderEditor(); // re-render: the form's max / fully-booked state depends on remaining
-  renderTree();
-}
-function deleteSale(sid) {
-  if (!isAdmin()) { alert(DENY); return; }
-  const e = current(); if (!e) return;
-  const x = (e.sales || []).find((s) => s.id === sid); if (!x) return;
-  if (!confirm(`Delete sale of ${num(x.slots)} slot(s) / ${money(x.amount)} dated ${x.date || "(no date)"}?\n${x.note || ""}\n\nThis cannot be undone.`)) return;
-  e.sales = (e.sales || []).filter((s) => s.id !== sid);
+  const name = document.getElementById("bkName").value.trim();
+  const pax = Math.round(Number(document.getElementById("bkPax").value) || 0);
+  const srp = Number(document.getElementById("bkSrp").value) || 0;
+  const type = document.getElementById("bkType").value || "full";
+  if (!name) { alert("Enter the Facebook Name (booking owner)."); return; }
+  if (pax <= 0) { alert("Enter the number of pax availed (1 or more)."); return; }
+  if (pax > d.remaining) { alert(`Only ${d.remaining} slot(s) available. Reduce the pax.`); return; }
+  const b = { id: uid(), fbName: name, pax, srp, paymentType: type, guests: Array.from({ length: pax }, () => ""), payments: [], remarks: "" };
+  e.bookings = e.bookings || []; e.bookings.push(b); expandedBk.add(b.id);
   save(); renderEditor(); renderTree();
 }
-/** Opening figures on a fresh tour code: records an opening payment + opening sale in one go. */
+function toggleBooking(id) { if (expandedBk.has(id)) expandedBk.delete(id); else expandedBk.add(id); renderBookings(); }
+function updateBookingField(id, field, value) {
+  const e = current(); const b = bkFind(id); if (!e || !b) return;
+  if (field === "pax") {
+    let pax = Math.max(0, Math.round(Number(value) || 0));
+    const others = (e.bookings || []).filter((x) => x.id !== id).reduce((s, x) => s + num(x.pax), 0);
+    const cap = derive(e).totalSlots - others;
+    if (pax > cap) { pax = cap; alert(`Only ${cap} slot(s) available for this booking.`); }
+    b.pax = pax; b.guests = b.guests || [];
+    while (b.guests.length < pax) b.guests.push("");
+    if (b.guests.length > pax) b.guests.length = pax;
+    save(); renderBookings(); renderDerived(); renderTree();
+  } else if (field === "srp") {
+    b.srp = Number(value) || 0; save(); renderBookings(); renderDerived();
+  } else {
+    b[field] = value; save();
+    if (field === "fbName") renderTree();
+  }
+}
+function updateGuest(id, index, value) { const b = bkFind(id); if (!b) return; b.guests = b.guests || []; b.guests[index] = value; save(); }
+function addBookingPayment(id) {
+  const b = bkFind(id); if (!b) return;
+  const amount = Number(document.getElementById("bp-amt-" + id).value);
+  if (!isFinite(amount) || amount <= 0) { alert("Enter a payment amount greater than zero."); return; }
+  b.payments = b.payments || [];
+  b.payments.push({ id: uid(), date: document.getElementById("bp-date-" + id).value || todayISO(), amount, note: document.getElementById("bp-note-" + id).value.trim() });
+  save(); renderBookings(); renderDerived(); renderTree();
+}
+function deleteBookingPayment(id, pid) {
+  if (!isAdmin()) { alert(DENY); return; }
+  const b = bkFind(id); if (!b) return;
+  const p = (b.payments || []).find((x) => x.id === pid); if (!p) return;
+  if (!confirm(`Delete payment of ${money(p.amount)}?`)) return;
+  b.payments = (b.payments || []).filter((x) => x.id !== pid);
+  save(); renderBookings(); renderDerived(); renderTree();
+}
+function deleteBooking(id) {
+  if (!isAdmin()) { alert(DENY); return; }
+  const e = current(); const b = bkFind(id); if (!e || !b) return;
+  if (!confirm(`Delete booking "${b.fbName || "(no name)"}" (${num(b.pax)} pax)?\n\nThis removes its guest list and all its payments. This cannot be undone.`)) return;
+  e.bookings = (e.bookings || []).filter((x) => x.id !== id); expandedBk.delete(id);
+  save(); renderEditor(); renderTree();
+}
+/** Opening figures on a fresh tour code: records an opening supplier payment + an opening booking. */
 function recordOpening() {
   if (!isAdmin()) { alert(DENY); return; }
   const e = current(); if (!e) return;
-  if ((e.payments || []).length || (e.sales || []).length) { alert("This tour code already has entries — add them below instead."); return; }
+  if ((e.payments || []).length || (e.bookings || []).length) { alert("This tour code already has entries — add them below instead."); return; }
   const paid = Number(document.getElementById("oPaid").value) || 0;
   const slots = Math.round(Number(document.getElementById("oSlots").value) || 0);
   const coll = Number(document.getElementById("oColl").value) || 0;
@@ -2187,9 +2292,12 @@ function recordOpening() {
   if (slots > totalSlots) { alert(`Slots sold (${slots}) can't exceed total slots (${totalSlots}).\n\nSet Slot + FOC in Details first.`); return; }
   if (paid > num(e.totalCost) + CENT) { alert(`Already paid (${money(paid)}) can't exceed Total Cost (${money(e.totalCost)}).\n\nSet the Total Cost in Details first.`); return; }
 
-  e.payments = e.payments || []; e.sales = e.sales || [];
+  e.payments = e.payments || []; e.bookings = e.bookings || [];
   if (paid > 0) e.payments.push({ id: uid(), date, amount: paid, note: "Opening balance" });
-  if (slots > 0 || coll > 0) e.sales.push({ id: uid(), date, slots, amount: coll, note: "Opening balance" });
+  if (slots > 0 || coll > 0) {
+    e.bookings.push({ id: uid(), fbName: "Opening balance", pax: slots, srp: coll, paymentType: "full",
+      guests: Array.from({ length: slots }, () => ""), payments: coll > 0 ? [{ id: uid(), date, amount: coll, note: "Opening" }] : [], remarks: "Imported opening figures" });
+  }
   save(); renderEditor(); renderTree();
 }
 function resetAll() {
@@ -2353,7 +2461,12 @@ document.getElementById("pkgBody").addEventListener("input", (ev) => {
 });
 document.getElementById("pkgOvl").addEventListener("click", (ev) => { if (ev.target.id === "pkgOvl") closePkgCfg(); });
 document.getElementById("editor").addEventListener("input", (ev) => {
-  if (ev.target.tagName === "SELECT") return; // dropdowns handled by the change listener below
+  const t = ev.target;
+  if (t.dataset.bk !== undefined && t.tagName !== "SELECT") {   // booking field / guest name
+    if (t.dataset.bkg !== undefined) return updateGuest(t.dataset.bk, Number(t.dataset.bkg), t.value);
+    if (t.dataset.bkf) return updateBookingField(t.dataset.bk, t.dataset.bkf, t.value);
+  }
+  if (t.tagName === "SELECT") return; // dropdowns handled by the change listener below
   const key = ev.target.dataset.field; if (!key) return;
   if (!isAdmin()) return; // fields are disabled for regular users; this is the backstop
   const e = current(); if (!e) return;
@@ -2368,6 +2481,7 @@ document.getElementById("editor").addEventListener("input", (ev) => {
 });
 document.getElementById("editor").addEventListener("change", (ev) => {
   if (ev.target.tagName !== "SELECT") return;
+  if (ev.target.dataset.bk !== undefined && ev.target.dataset.bkf) return updateBookingField(ev.target.dataset.bk, ev.target.dataset.bkf, ev.target.value);
   if (ev.target.dataset.field !== "package") return;
   if (!isAdmin()) { alert(DENY); return; }
   const e = current(); if (!e) return;
@@ -2401,12 +2515,14 @@ document.getElementById("editor").addEventListener("click", (ev) => {
     editing = !editing; renderEditor(); return;
   }
   if (ev.target.closest("[data-addpay]")) return addPayment();
-  if (ev.target.closest("[data-addsale]")) return addSale();
+  if (ev.target.closest("[data-addbooking]")) return addBooking();
   if (ev.target.closest("[data-openingfill]")) return recordOpening();
+  const bt = ev.target.closest("[data-bktoggle]"); if (bt) return toggleBooking(bt.dataset.bktoggle);
+  const bap = ev.target.closest("[data-bkaddpay]"); if (bap) return addBookingPayment(bap.dataset.bkaddpay);
+  const bdel = ev.target.closest("[data-bkdel]"); if (bdel) return deleteBooking(bdel.dataset.bkdel);
+  const bdp = ev.target.closest("[data-bkdelpay]"); if (bdp) { const parts = bdp.dataset.bkdelpay.split(":"); return deleteBookingPayment(parts[0], parts[1]); }
   const dp = ev.target.closest("[data-delpay]");
   if (dp) return deletePayment(dp.dataset.delpay);
-  const ds = ev.target.closest("[data-delsale]");
-  if (ds) return deleteSale(ds.dataset.delsale);
 });
 document.getElementById("search").addEventListener("input", (ev) => { sel.q = ev.target.value; renderTree(); });
 

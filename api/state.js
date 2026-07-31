@@ -71,8 +71,9 @@ async function mirrorPublic(URL_, sb, data) {
     const parts = String(e.travelRaw || "").split(/\s+-\s+/);
     const start = isoMDY(parts[0]), end = isoMDY(parts[parts.length - 1]);
     const paid = (e.payments || []).reduce((s, p) => s + num(p.amount), 0);
-    const collected = (e.sales || []).reduce((s, x) => s + num(x.amount), 0);
-    const slotsSold = (e.sales || []).reduce((s, x) => s + num(x.slots), 0);
+    const bookings = Array.isArray(e.bookings) ? e.bookings : [];
+    const slotsSold = bookings.reduce((s, b) => s + num(b.pax), 0);
+    const collected = bookings.reduce((s, b) => s + (b.payments || []).reduce((t, p) => t + num(p.amount), 0), 0);
     const totalSlots = num(e.slot) + num(e.foc);
     const status = e.voided ? "VOID" : (end && new Date(end) < today ? "FINISHED" : "PENDING");
     return {
