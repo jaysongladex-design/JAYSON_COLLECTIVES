@@ -1279,6 +1279,8 @@ function derive(e) {
   const bookings = Array.isArray(e.bookings) ? e.bookings : [];
   const slotSold = bookings.reduce((s, b) => s + num(b.pax), 0);
   const collected = bookings.reduce((s, b) => s + bkPaid(b), 0);
+  const srpTotal = bookings.reduce((s, b) => s + num(b.srp), 0);
+  const receivable = srpTotal - collected; // remaining balance still to collect FROM clients
   const balance = num(e.totalCost) - paid;
   const remaining = totalSlots - slotSold;
   const profit = collected - paid;
@@ -1287,7 +1289,7 @@ function derive(e) {
   const daysToSoldOut = hold && out ? daysBetween(hold, out) : null;
   const sellingDays = daysToSoldOut != null ? Math.max(1, daysToSoldOut) : hold ? Math.max(1, daysBetween(hold, new Date())) : 1;
   const perDay = slotSold > 0 ? slotSold / sellingDays : 0;
-  return { totalSlots, paid, slotSold, collected, balance, remaining, profit, roi, daysToSoldOut, perDay, perWeek: perDay * 7 };
+  return { totalSlots, paid, slotSold, collected, srpTotal, receivable, balance, remaining, profit, roi, daysToSoldOut, perDay, perWeek: perDay * 7 };
 }
 const current = () => DB.entries.find((e) => e.id === sel.id) || null;
 const allPackages = () => [...new Set(DB.entries.map((e) => e.package).filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -1753,11 +1755,11 @@ function renderPackageDashboard(host) {
   const list = all ? DB.entries : DB.entries.filter((e) => e.package === statsPkg);
   const voided = list.filter((e) => stOf(e) === "VOID");
   const live = list.filter((e) => stOf(e) !== "VOID"); // VOID drops out of the totals
-  const t = { cost: 0, paid: 0, bal: 0, coll: 0, profit: 0, slots: 0, sold: 0, rem: 0 };
+  const t = { cost: 0, paid: 0, bal: 0, coll: 0, recv: 0, profit: 0, slots: 0, sold: 0, rem: 0 };
   live.forEach((e) => {
     const d = derive(e);
     t.cost += num(e.totalCost); t.paid += d.paid; t.bal += d.balance;
-    t.coll += d.collected; t.profit += d.profit;
+    t.coll += d.collected; t.recv += d.receivable; t.profit += d.profit;
     t.slots += d.totalSlots; t.sold += d.slotSold; t.rem += Math.max(0, d.remaining);
   });
   const roi = t.cost ? (t.profit / t.cost) * 100 : 0;
@@ -1797,6 +1799,7 @@ function renderPackageDashboard(host) {
         ${tile("Paid to Supplier", money(t.paid))}
         ${tile("Balance Payable", money(t.bal), t.bal >= CENT ? "red" : "green")}
         ${tile("Collected from Pax", money(t.coll), "gold")}
+        ${tile("Receivable from Pax", money(t.recv), t.recv > CENT ? "red" : "green")}
         ${tile("Profit", money(t.profit), t.profit >= 0 ? "green" : "red")}
         ${tile("ROI", roi.toFixed(2) + "%", roi >= 0 ? "green" : "red")}
       </div>
@@ -2175,6 +2178,7 @@ function renderDerived() {
     tile("Slot Sold", qty(d.slotSold)),
     tile("Remaining Slot", qty(d.remaining), d.remaining < 0 ? "red" : d.remaining > 0 ? "gold" : "green"),
     tile("Collected from Pax", money(d.collected)),
+    tile("Receivable from Pax", money(d.receivable), d.receivable > CENT ? "red" : "green"),
     tile("Current Payment", money(d.paid)),
     tile("Balance Payable", money(d.balance), d.balance > 0 ? "red" : "green"),
     tile("Profit", money(d.profit), d.profit >= 0 ? "green" : "red"),
