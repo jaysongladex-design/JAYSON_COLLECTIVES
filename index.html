@@ -2116,7 +2116,7 @@ function renderBookings() {
         </div>
         <div class="sub" style="margin:9px 0 4px">Guest / Passenger List (${guests.length} of ${num(b.pax)})</div>
         ${guests.length ? guests.map((g, i) => `<label class="f gf"><span>${i + 1}.</span><input data-bk="${b.id}" data-bkg="${i}" type="text" value="${esc(g || "")}" placeholder="Guest name"></label>`).join("") : `<div class="empty">Set Pax above to add guest name fields.</div>`}
-        <div class="sub" style="margin:11px 0 4px">Payments — Paid <b>${money(paid)}</b> · Balance <b>${money(bal)}</b> · <span class="sttag ${bkClass(st)}">${st}</span></div>
+        <div class="sub" style="margin:11px 0 4px">Booking Payments — Paid <b>${money(paid)}</b> · Balance <b>${money(bal)}</b> · <span class="sttag ${bkClass(st)}">${st}</span></div>
         <div>${renderBkPayments(b)}</div>
         <div class="pay-form" style="margin-top:6px">
           <label class="f"><span>Date</span><input type="date" id="bp-date-${b.id}" value="${todayISO()}"></label>
@@ -2234,10 +2234,11 @@ function addBooking() {
   save(); renderEditor(); renderTree();
 }
 function toggleBooking(id) { if (expandedBk.has(id)) expandedBk.delete(id); else expandedBk.add(id); renderBookings(); }
-function updateBookingField(id, field, value) {
+function updateBookingField(id, field, value, commit) {
   const e = current(); const b = bkFind(id); if (!e || !b) return;
   if (field === "pax") {
     let pax = Math.max(0, Math.round(Number(value) || 0));
+    if (!commit) { b.pax = pax; save(); renderDerived(); return; } // live typing: don't rebuild the inputs
     const others = (e.bookings || []).filter((x) => x.id !== id).reduce((s, x) => s + num(x.pax), 0);
     const cap = derive(e).totalSlots - others;
     if (pax > cap) { pax = cap; alert(`Only ${cap} slot(s) available for this booking.`); }
@@ -2246,7 +2247,10 @@ function updateBookingField(id, field, value) {
     if (b.guests.length > pax) b.guests.length = pax;
     save(); renderBookings(); renderDerived(); renderTree();
   } else if (field === "srp") {
-    b.srp = Number(value) || 0; save(); renderBookings(); renderDerived();
+    b.srp = Number(value) || 0; save(); renderDerived();   // live: keeps focus so you can type the full amount
+    if (commit) renderBookings();                          // refresh balance/status on blur
+  } else if (field === "paymentType") {
+    b.paymentType = value; save();
   } else {
     b[field] = value; save();
     if (field === "fbName") renderTree();
@@ -2464,7 +2468,7 @@ document.getElementById("editor").addEventListener("input", (ev) => {
   const t = ev.target;
   if (t.dataset.bk !== undefined && t.tagName !== "SELECT") {   // booking field / guest name
     if (t.dataset.bkg !== undefined) return updateGuest(t.dataset.bk, Number(t.dataset.bkg), t.value);
-    if (t.dataset.bkf) return updateBookingField(t.dataset.bk, t.dataset.bkf, t.value);
+    if (t.dataset.bkf) return updateBookingField(t.dataset.bk, t.dataset.bkf, t.value, false); // live, keep focus
   }
   if (t.tagName === "SELECT") return; // dropdowns handled by the change listener below
   const key = ev.target.dataset.field; if (!key) return;
@@ -2480,8 +2484,8 @@ document.getElementById("editor").addEventListener("input", (ev) => {
   }
 });
 document.getElementById("editor").addEventListener("change", (ev) => {
+  if (ev.target.dataset.bk !== undefined && ev.target.dataset.bkf) return updateBookingField(ev.target.dataset.bk, ev.target.dataset.bkf, ev.target.value, true); // blur -> commit
   if (ev.target.tagName !== "SELECT") return;
-  if (ev.target.dataset.bk !== undefined && ev.target.dataset.bkf) return updateBookingField(ev.target.dataset.bk, ev.target.dataset.bkf, ev.target.value);
   if (ev.target.dataset.field !== "package") return;
   if (!isAdmin()) { alert(DENY); return; }
   const e = current(); if (!e) return;
