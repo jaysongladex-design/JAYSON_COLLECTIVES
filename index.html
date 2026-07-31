@@ -2036,7 +2036,9 @@ function renderEditor() {
     </section>` : ""}
 
     <section class="card">
-      <h3>Payments to Supplier</h3>
+      <h3 style="cursor:pointer;display:flex;align-items:center;justify-content:space-between" data-suptoggle="1">
+        <span>Payments to Supplier</span><span class="chev">${supplierOpen ? "▾" : "▸"}</span></h3>
+      ${supplierOpen ? `
       <p class="sub">Add each payment as its own entry — Current Payment and Balance Payable update automatically.</p>
       <div id="payments"></div>
       ${d.balance >= CENT
@@ -2048,22 +2050,14 @@ function renderEditor() {
            </div>`
         : `<div class="full${d.balance <= -CENT ? " warn" : ""}">${d.balance <= -CENT
              ? `⚠ Overpaid by ${money(-d.balance)} — there is no remaining balance. Payments are closed.`
-             : `✔ Fully paid — there is no remaining balance to the supplier.`}</div>`}
+             : `✔ Fully paid — there is no remaining balance to the supplier.`}</div>`}`
+        : `<p class="sub">Tap the heading to open and log payments to the supplier.</p>`}
     </section>
 
     <section class="card">
       <h3>Bookings — Facebook Names</h3>
       <p class="sub">Each booking owner: pax, guest list, SRP (collectible) and payments. Slot Sold, Remaining and Collected update automatically.</p>
       <div id="bookings"></div>
-      ${d.remaining > 0
-        ? `<div class="pay-form bk-add">
-             <label class="f"><span>Facebook Name</span><input type="text" id="bkName" placeholder="e.g. Juan Dela Cruz"></label>
-             <label class="f"><span>Pax availed</span><input type="number" id="bkPax" min="1" max="${d.remaining}" step="1" value="1"></label>
-             <label class="f"><span>SRP (total collectible)</span><input type="number" step="any" id="bkSrp" placeholder="0.00"></label>
-             <label class="f"><span>Payment type</span><select id="bkType"><option value="full">Full Payment</option><option value="installment">Installment</option></select></label>
-             <button class="btn-add" data-addbooking="1">＋ Add Booking</button>
-           </div>`
-        : `<div class="full">✔ Fully booked — all ${d.totalSlots} slots availed. No slots left for a new booking.</div>`}
     </section>
 
     <section class="card">
@@ -2081,21 +2075,24 @@ function renderEditor() {
 }
 
 let expandedBk = new Set();
+let supplierOpen = false; // Payments to Supplier starts hidden until clicked
+const MOP = ["BPI", "BDO", "GCASH", "CASH", "CHECK", "MONEYPAY", "METROBANK", "MAYA ONLINE", "MAYA TERMINAL", "PAYPAL", "QRPH", "OTHERS"];
 function renderBkPayments(b) {
   const rows = (b.payments || []).slice().sort((a, c) => String(a.date).localeCompare(String(c.date)));
   if (!rows.length) return `<div class="empty">No payments yet.</div>`;
   const total = rows.reduce((s, p) => s + num(p.amount), 0);
-  return `<table><thead><tr><th>Date</th><th class="num">Amount</th><th>Note</th><th></th></tr></thead>
-    <tbody>${rows.map((p) => `<tr><td>${esc(p.date || "—")}</td><td class="num">${money(p.amount)}</td><td>${esc(p.note || "")}</td>
+  return `<table><thead><tr><th>Date</th><th class="num">Amount</th><th>MOP</th><th>Note</th><th></th></tr></thead>
+    <tbody>${rows.map((p) => `<tr><td>${esc(p.date || "—")}</td><td class="num">${money(p.amount)}</td><td>${esc(p.mop || "")}</td><td>${esc(p.note || "")}</td>
       <td style="text-align:right">${isAdmin() ? `<button class="btn-x" data-bkdelpay="${b.id}:${p.id}" title="Delete">✕</button>` : ""}</td></tr>`).join("")}</tbody>
-    <tfoot><tr class="totrow"><td>TOTAL (${rows.length})</td><td class="num">${money(total)}</td><td></td><td></td></tr></tfoot></table>`;
+    <tfoot><tr class="totrow"><td>TOTAL (${rows.length})</td><td class="num">${money(total)}</td><td></td><td></td><td></td></tr></tfoot></table>`;
 }
 function renderBookings() {
   const e = current(); if (!e) return;
   const host = document.getElementById("bookings"); if (!host) return;
   const bks = e.bookings || [];
-  if (!bks.length) { host.innerHTML = `<div class="empty">No bookings yet. Add the first Facebook Name below.</div>`; return; }
-  host.innerHTML = bks.map((b) => {
+  const d = derive(e);
+  const mopOpts = MOP.map((m) => `<option value="${m}">${m}</option>`).join("");
+  const list = bks.length ? bks.map((b) => {
     const paid = bkPaid(b), bal = bkBalance(b), st = bkStatus(b);
     const open = expandedBk.has(b.id);
     const guests = b.guests || [];
@@ -2121,21 +2118,36 @@ function renderBookings() {
         <div class="pay-form" style="margin-top:6px">
           <label class="f"><span>Date</span><input type="date" id="bp-date-${b.id}" value="${todayISO()}"></label>
           <label class="f"><span>Amount</span><input type="number" step="any" id="bp-amt-${b.id}" placeholder="0.00"></label>
-          <label class="f"><span>Note</span><input type="text" id="bp-note-${b.id}" placeholder="e.g. GCash deposit"></label>
+          <label class="f"><span>MOP</span><select id="bp-mop-${b.id}">${mopOpts}</select></label>
+          <label class="f"><span>Note</span><input type="text" id="bp-note-${b.id}" placeholder="e.g. reference no."></label>
           <button class="btn-add" data-bkaddpay="${b.id}">＋ Add Payment</button>
         </div>
         <label class="f" style="margin-top:9px"><span>Remarks</span><input data-bk="${b.id}" data-bkf="remarks" type="text" value="${esc(b.remarks || "")}" placeholder="optional"></label>
         ${isAdmin() ? `<div style="margin-top:9px"><button data-bkdel="${b.id}" style="background:#C0453B;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:700;font-size:12px;cursor:pointer">🗑 Delete booking</button></div>` : ""}
       </div>` : ""}
     </div>`;
-  }).join("");
+  }).join("") : `<div class="empty">No bookings yet. Add the first Facebook Name below.</div>`;
+
+  // add-booking form — hidden while a booking is open (finish it first) or when fully booked
+  let add;
+  if (d.remaining <= 0) add = `<div class="full">✔ Fully booked — all ${d.totalSlots} slots availed. No slots left for a new booking.</div>`;
+  else if (expandedBk.size > 0) add = `<div class="full">✎ Finish the open booking first — collapse it (tap its name) before adding a new one.</div>`;
+  else add = `<div class="pay-form bk-add" style="margin-top:10px">
+       <label class="f"><span>Facebook Name</span><input type="text" id="bkName" placeholder="e.g. Juan Dela Cruz"></label>
+       <label class="f"><span>Pax availed</span><input type="number" id="bkPax" min="1" max="${d.remaining}" step="1" value="1"></label>
+       <label class="f"><span>SRP (total collectible)</span><input type="number" step="any" id="bkSrp" placeholder="0.00"></label>
+       <label class="f"><span>Payment type</span><select id="bkType"><option value="full">Full Payment</option><option value="installment">Installment</option></select></label>
+       <button class="btn-add" data-addbooking="1">＋ Add Booking</button>
+     </div>`;
+  host.innerHTML = list + add;
 }
 
 function renderPayments() {
   const e = current(); if (!e) return;
+  const host = document.getElementById("payments"); if (!host) return; // supplier section collapsed
   const rows = (e.payments || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const total = rows.reduce((s, p) => s + num(p.amount), 0);
-  document.getElementById("payments").innerHTML = rows.length
+  host.innerHTML = rows.length
     ? `<table><thead><tr><th>Date</th><th class="num">Amount</th><th>Note</th><th></th></tr></thead>
        <tbody>${rows.map((p) => `<tr>
             <td>${esc(p.date || "—")}</td>
@@ -2261,8 +2273,9 @@ function addBookingPayment(id) {
   const b = bkFind(id); if (!b) return;
   const amount = Number(document.getElementById("bp-amt-" + id).value);
   if (!isFinite(amount) || amount <= 0) { alert("Enter a payment amount greater than zero."); return; }
+  const mopEl = document.getElementById("bp-mop-" + id);
   b.payments = b.payments || [];
-  b.payments.push({ id: uid(), date: document.getElementById("bp-date-" + id).value || todayISO(), amount, note: document.getElementById("bp-note-" + id).value.trim() });
+  b.payments.push({ id: uid(), date: document.getElementById("bp-date-" + id).value || todayISO(), amount, mop: mopEl ? mopEl.value : "", note: document.getElementById("bp-note-" + id).value.trim() });
   save(); renderBookings(); renderDerived(); renderTree();
 }
 function deleteBookingPayment(id, pid) {
@@ -2518,6 +2531,7 @@ document.getElementById("editor").addEventListener("click", (ev) => {
     if (!isAdmin()) { alert(DENY); return; }
     editing = !editing; renderEditor(); return;
   }
+  if (ev.target.closest("[data-suptoggle]")) { supplierOpen = !supplierOpen; renderEditor(); return; }
   if (ev.target.closest("[data-addpay]")) return addPayment();
   if (ev.target.closest("[data-addbooking]")) return addBooking();
   if (ev.target.closest("[data-openingfill]")) return recordOpening();
