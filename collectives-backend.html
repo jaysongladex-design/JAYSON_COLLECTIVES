@@ -2077,6 +2077,7 @@ function renderEditor() {
 let expandedBk = new Set();
 let supplierOpen = false; // Payments to Supplier starts hidden until clicked
 const MOP = ["BPI", "BDO", "GCASH", "CASH", "CHECK", "MONEYPAY", "METROBANK", "MAYA ONLINE", "MAYA TERMINAL", "PAYPAL", "QRPH", "OTHERS"];
+const REF_CODES = ["GDX", "GDE", "POTB", "KLIKK", "GXP"];
 function renderBkPayments(b) {
   const rows = (b.payments || []).slice().sort((a, c) => String(a.date).localeCompare(String(c.date)));
   if (!rows.length) return `<div class="empty">No payments yet.</div>`;
@@ -2099,7 +2100,7 @@ function renderBookings() {
     return `<div class="booking">
       <div class="b-head" data-bktoggle="${b.id}">
         <span class="b-name">${esc(b.fbName || "(no name)")}</span>
-        <span class="b-meta">${qty(b.pax)} pax · ${money(b.srp)} SRP</span>
+        <span class="b-meta">${(b.refCode || b.refNum) ? esc(((b.refCode || "") + " " + (b.refNum || "")).trim()) + " · " : ""}${qty(b.pax)} pax · ${money(b.srp)} SRP</span>
         <span class="b-bal">Bal ${money(bal)}</span>
         <span class="sttag ${bkClass(st)}">${st}</span>
         <span class="chev">${open ? "▾" : "▸"}</span>
@@ -2111,6 +2112,12 @@ function renderBookings() {
           <label class="f"><span>SRP (total collectible)</span><input data-bk="${b.id}" data-bkf="srp" type="number" step="any" value="${esc(b.srp ?? 0)}"></label>
           <label class="f"><span>Payment type</span><select data-bk="${b.id}" data-bkf="paymentType"><option value="full"${b.paymentType === "full" ? " selected" : ""}>Full Payment</option><option value="installment"${b.paymentType === "installment" ? " selected" : ""}>Installment</option></select></label>
         </div>
+        <label class="f" style="margin-top:9px"><span>Booking Ref / Account</span>
+          <div style="display:flex;gap:6px">
+            <select data-bk="${b.id}" data-bkf="refCode" style="flex:0 0 96px;width:96px"><option value=""${!b.refCode ? " selected" : ""}>—</option>${REF_CODES.map((c) => `<option value="${c}"${b.refCode === c ? " selected" : ""}>${c}</option>`).join("")}</select>
+            <input data-bk="${b.id}" data-bkf="refNum" type="text" value="${esc(b.refNum || "")}" placeholder="number" style="flex:1">
+          </div>
+        </label>
         <div class="sub" style="margin:9px 0 4px">Guest / Passenger List (${guests.length} of ${num(b.pax)})</div>
         ${guests.length ? guests.map((g, i) => `<label class="f gf"><span>${i + 1}.</span><input data-bk="${b.id}" data-bkg="${i}" type="text" value="${esc(g || "")}" placeholder="Guest name"></label>`).join("") : `<div class="empty">Set Pax above to add guest name fields.</div>`}
         <div class="sub" style="margin:11px 0 4px">Booking Payments — Paid <b>${money(paid)}</b> · Balance <b>${money(bal)}</b> · <span class="sttag ${bkClass(st)}">${st}</span></div>
