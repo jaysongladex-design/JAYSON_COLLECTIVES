@@ -1132,6 +1132,7 @@ function seedDB() {
     users: [{ id: ADMIN_ID, name: "Administrator", role: "admin" }],
     currentUserId: ADMIN_ID,
     packageColors: {},
+    budget: { seed: 0 }, // revolving working-capital pool (Settings → Revolving budget)
     entries: SEED.map((r) => ({
       id: uid(),
       package: r.package || "",
@@ -1206,6 +1207,9 @@ function migrateUsers(d) {
   if (!d.users.some((u) => u.role === "admin")) d.users[0].role = "admin"; // never lock everyone out
   if (!d.users.some((u) => u.id === d.currentUserId)) d.currentUserId = d.users[0].id;
   if (!d.packageColors || typeof d.packageColors !== "object") d.packageColors = {};
+  // revolving-budget pool: keep an extensible object (seed now; alert threshold etc. later)
+  if (!d.budget || typeof d.budget !== "object") d.budget = { seed: 0 };
+  d.budget.seed = num(String(d.budget.seed).replace(/,/g, ""));
   return d;
 }
 function load() {
@@ -1299,6 +1303,23 @@ function derive(e) {
 }
 const current = () => DB.entries.find((e) => e.id === sel.id) || null;
 const allPackages = () => [...new Set(DB.entries.map((e) => e.package).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+/* ===== Revolving budget (working-capital pool) =====================
+ * Central money-pool math. The dashboard's global panel uses revolvingFund().
+ * A future cash-flow ledger (Option 3) can reuse budgetSeed() + the same
+ * collected/paid figures, so this stays the single source of the fund math. */
+const budgetSeed = () => num(DB.budget && DB.budget.seed);
+/** Aggregate the pool across a set of departures (VOID excluded). Defaults to the whole business. */
+function revolvingFund(entries) {
+  const live = (entries || DB.entries).filter((e) => stOf(e) !== "VOID");
+  let coll = 0, paid = 0, comingDue = 0, expectedIn = 0;
+  live.forEach((e) => { const d = derive(e); coll += d.collected; paid += d.paid; comingDue += d.balance; expectedIn += d.receivable; });
+  const seed = budgetSeed();
+  const pool = seed + coll - paid;             // cash sitting in the pool right now
+  const gap = pool + expectedIn - comingDue;   // + = surplus after clearing suppliers; − = shortfall
+  const coverage = comingDue > CENT ? Math.max(0, Math.min(100, (pool / comingDue) * 100)) : 100;
+  return { seed, coll, paid, comingDue, expectedIn, pool, gap, coverage };
+}
 
 /* ===== credentials =====
  * Passwords are hashed (SHA-256 + per-user salt) so the literal password is never
@@ -1461,6 +1482,21 @@ function renderSettings() {
     </div>
 
     <div class="sec">
+      <h4>Revolving budget</h4>
+      <p class="h">Your working-capital pool for buying collective slots. Enter the <b>seed capital</b> you started
+        with (cash you put in before any pax paid — enter <b>0</b> if you fund purchases purely from collections).
+        The dashboard's <b>Revolving budget</b> panel then tracks it live:
+        <b>seed + collected from pax − paid to suppliers</b>.</p>
+      ${admin ? `<label class="f" style="max-width:280px"><span>Seed capital (₱)</span>
+          <input type="text" inputmode="decimal" id="budgetSeed" value="${budgetSeed() ? esc(budgetSeed().toLocaleString("en-US")) : ""}" placeholder="0" autocomplete="off"></label>
+        <div style="margin-top:7px;display:flex;gap:8px;align-items:center">
+          <button class="btn-add" data-savebudget="1">Save seed capital</button>
+          <span class="h" id="budgetMsg"></span>
+        </div>`
+        : `<p class="h">Only admins can set the seed capital. Current: <b>${money(budgetSeed())}</b>.</p>`}
+    </div>
+
+    <div class="sec">
       <h4>Users</h4>
       <p class="h">${admin ? "Add or remove users. There must always be at least one admin." : "Only admins can add or remove users."}</p>
       ${(DB.users || []).map((u) => `
@@ -1560,6 +1596,18 @@ function renderSettings() {
 }
 const PAGES_URL = "https://jaysongladex-design.github.io/JAYSON_COLLECTIVES/collectives-public.json";
 function apiEndpoint() { return (DB.catalogUrl && DB.catalogUrl.trim()) || PAGES_URL; }
+function saveBudgetSeed() {
+  if (!isAdmin()) { alert(DENY); return; }
+  const el = document.getElementById("budgetSeed");
+  const val = Math.max(0, num(String(el ? el.value : "0").replace(/,/g, "")));
+  if (!DB.budget || typeof DB.budget !== "object") DB.budget = { seed: 0 };
+  DB.budget.seed = val;
+  save();
+  const msg = document.getElementById("budgetMsg");
+  if (msg) { msg.textContent = "Saved ✓ — seed set to " + money(val); msg.style.color = "var(--good, #17794a)"; }
+  if (el) el.value = val ? val.toLocaleString("en-US") : "";
+  renderEditor(); // refresh the dashboard's Revolving budget panel if it's open
+}
 function saveApiBase() {
   if (!isAdmin()) { alert(DENY); return; }
   DB.catalogUrl = document.getElementById("apiBase").value.trim(); save(); renderSettings();
@@ -1714,6 +1762,7 @@ document.getElementById("settingsBody").addEventListener("click", (ev) => {
     return;
   }
   if (ev.target.closest("[data-adduser]")) return addUser();
+  if (ev.target.closest("[data-savebudget]")) return saveBudgetSeed();
   if (ev.target.closest("[data-saveapi]")) return saveApiBase();
   if (ev.target.closest("[data-exportcat]")) return exportCatalog();
   if (ev.target.closest("[data-publish]")) return publishToApi();
@@ -1771,6 +1820,7 @@ function renderPackageDashboard(host) {
   });
   const roi = t.cost ? (t.profit / t.cost) * 100 : 0;
   const sell = t.slots ? (t.sold / t.slots) * 100 : 0;
+  const f = revolvingFund(); // global working-capital pool (whole business, VOID excluded)
   const pkgs = new Set(list.map((e) => e.package).filter(Boolean)).size;
   const cnt = (s) => list.filter((e) => stOf(e) === s).length;
   const tile = (l, v, c) => `<div class="tile ${c || ""}"><div class="t-l">${l}</div><div class="t-v">${v}</div></div>`;
@@ -1811,6 +1861,20 @@ function renderPackageDashboard(host) {
         ${tile("ROI", roi.toFixed(2) + "%", roi >= 0 ? "green" : "red")}
       </div>
     </section>
+${all ? `
+    <section class="card">
+      <h3>Revolving budget</h3>
+      <p class="sub">Your working-capital pool for buying collective slots — <b>seed money + collected from pax − paid to suppliers</b>. Set your seed in <b>⚙ Settings → Revolving budget</b>.</p>
+      <div class="tiles">
+        ${tile("Seed capital", money(f.seed))}
+        ${tile("In the pool now", money(f.pool), f.pool >= 0 ? "green" : "red")}
+        ${tile("Coming due to suppliers", money(f.comingDue), f.comingDue >= CENT ? "red" : "green")}
+        ${tile("Still collectible from pax", money(f.expectedIn))}
+        ${tile(f.gap >= 0 ? "Surplus after suppliers" : "Shortfall to cover", money(Math.abs(f.gap)), f.gap >= 0 ? "green" : "red")}
+      </div>
+      <div class="pbar"><i style="width:${f.coverage.toFixed(1)}%"></i></div>
+      <p class="sub" style="margin-top:6px">The pool covers <b>${f.coverage.toFixed(0)}%</b> of the ${money(f.comingDue)} still owed to suppliers${f.comingDue < CENT ? " (nothing outstanding)." : f.gap < 0 ? ` — about <b>${money(Math.abs(f.gap))}</b> short after counting what's still collectible from pax. Fund it from new bookings or added seed capital.` : `, with <b>${money(f.gap)}</b> to spare after what's still collectible.`}</p>
+    </section>` : ""}
 
     <section class="card">
       <h3>Departures</h3>
