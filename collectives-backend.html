@@ -1341,9 +1341,9 @@ function renderWho() {
   document.querySelectorAll(".admin-only").forEach((el) => { el.style.display = isAdmin() ? "" : "none"; });
 }
 /* ===== login gate ===== */
-const gateNote = `<div class="gate-note"><b>Note:</b> this sign-in runs entirely in this browser — it prevents
-  accidental access on a shared PC, but it is not real security. Anyone with this file and developer tools can
-  bypass it. Passwords are hashed, never stored as text.</div>`;
+const gateNote = `<div class="gate-note"><b>Note:</b> the passcode is a shared, lightweight gate — not strong
+  security. Everyone who enters it sees the same data, so keep it within your team. On a shared PC, use
+  "Use this device only (offline)" so the passcode isn't stored on that computer.</div>`;
 
 function renderGate() {
   const gate = document.getElementById("authGate");
