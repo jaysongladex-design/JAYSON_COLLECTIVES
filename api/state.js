@@ -25,12 +25,16 @@ export default async function handler(req, res) {
   const URL_ = process.env.SUPABASE_URL;
   const KEY = process.env.SUPABASE_SERVICE_KEY;
   const SECRET = process.env.STATE_SECRET;
-  if (!URL_ || !KEY || !SECRET) return res.status(500).json({ ok: false, error: "Not configured yet (missing Vercel settings)." });
+  if (!URL_ || !KEY) return res.status(500).json({ ok: false, error: "Not configured yet (missing Supabase settings)." });
 
   let body = req.body;
   if (typeof body === "string") { try { body = JSON.parse(body); } catch { body = {}; } }
   const secret = req.headers["x-state-secret"] || (body && body.secret);
-  if (secret !== SECRET) return res.status(401).json({ ok: false, error: "Wrong access passphrase." });
+  // Accepts the Vercel STATE_SECRET (if set) OR this built-in passcode.
+  // NOTE: this passcode lives in a PUBLIC repo — anyone who reads it + has the
+  // app URL can open the app. It's a low bar by design (owner's choice).
+  const PASSCODE = "GLADEX123";
+  if (!secret || (secret !== PASSCODE && secret !== SECRET)) return res.status(401).json({ ok: false, error: "Wrong passcode." });
 
   const base = URL_.replace(/\/+$/, "") + "/rest/v1/app_state";
   const sb = { apikey: KEY, Authorization: "Bearer " + KEY, "Content-Type": "application/json" };
