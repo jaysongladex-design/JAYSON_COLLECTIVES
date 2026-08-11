@@ -1406,17 +1406,18 @@ function openApp() {
 }
 function signOut() {
   try { sessionStorage.removeItem(SESSION_KEY); } catch (e) {}
+  setStateSecret(""); // require the passcode again
   closeSettings();
   document.getElementById("editor").innerHTML = ""; // don't leave data on screen behind the gate
   document.getElementById("tree").innerHTML = "";
   sel = { id: null, pkg: null, q: "" }; statsPkg = null;
-  renderGate();
+  renderConnect(); // back to the passcode gate
 }
 document.getElementById("authCard").addEventListener("click", (ev) => {
   if (ev.target.closest("[data-setup]")) return doSetup();
   if (ev.target.closest("[data-login]")) return doLogin();
   if (ev.target.closest("[data-connect]")) return doConnect();
-  if (ev.target.closest("[data-offline]")) return renderGate(); // work on this device only
+  if (ev.target.closest("[data-offline]")) return startAuth(); // work on this device only (local data, admin)
 });
 document.getElementById("authCard").addEventListener("keydown", (ev) => {
   if (ev.key !== "Enter") return;
@@ -2578,11 +2579,11 @@ document.addEventListener("click", () => { if (statsOpen) { statsOpen = false; r
 // Nothing renders until someone signs in. On first run, the admin account is created here.
 /* ===== boot: connect to your data (server), then sign in ===== */
 function startAuth() {
-  let sid = null;
-  try { sid = sessionStorage.getItem(SESSION_KEY); } catch (e) {}
-  const u = sid ? (DB.users || []).find((x) => x.id === sid && hasCreds(x)) : null;
-  if (!needsSetup() && u) { DB.currentUserId = u.id; openApp(); return; }
-  renderGate();
+  // Single-passcode mode: whoever passed the passcode gate gets in as admin.
+  let a = (DB.users || []).find((u) => u.role === "admin") || (DB.users || [])[0];
+  if (!a) { a = { id: ADMIN_ID, name: "Administrator", role: "admin" }; DB.users = [a]; }
+  a.role = "admin"; DB.currentUserId = a.id;
+  openApp();
 }
 /** Replace local data with the server's (server is the source of truth). Returns false if server was empty. */
 function adoptRemote(remote) {
@@ -2612,11 +2613,11 @@ function renderConnect(msg) {
   card.innerHTML = `
     <div class="gate-logo">CF</div>
     <div class="gate-brand">Collectives Finance</div>
-    <h2>Connect to your data</h2>
-    <div class="g-sub">Enter your access passphrase to load your data. The same passphrase on any device or browser shows the same data.</div>
+    <h2>Enter passcode</h2>
+    <div class="g-sub">Enter the passcode to open Collectives Finance. The same passcode on any device shows the same data.</div>
     <div class="gate-err" id="gErr"></div>
-    <label class="f"><span>Access passphrase</span><input type="password" id="cSecret" autocomplete="off"></label>
-    <button class="gate-btn" data-connect="1">Connect</button>
+    <label class="f"><span>Passcode</span><input type="password" id="cSecret" autocomplete="off"></label>
+    <button class="gate-btn" data-connect="1">Enter</button>
     <button class="gate-btn" data-offline="1" style="background:#5a6b7d;margin-top:8px">Use this device only (offline)</button>
     ${gateNote}`;
   if (msg) gateErr(msg);
@@ -2624,9 +2625,9 @@ function renderConnect(msg) {
 }
 async function doConnect() {
   const secret = document.getElementById("cSecret").value.trim();
-  if (!secret) return gateErr("Enter your access passphrase.");
+  if (!secret) return gateErr("Enter the passcode.");
   const btn = document.querySelector("[data-connect]");
-  if (btn) { btn.disabled = true; btn.textContent = "Connecting…"; }
+  if (btn) { btn.disabled = true; btn.textContent = "Opening…"; }
   try {
     const payload = await serverLoad(secret);
     setStateSecret(secret);
@@ -2634,8 +2635,8 @@ async function doConnect() {
     setCloud("saved");
     startAuth();
   } catch (e) {
-    if (btn) { btn.disabled = false; btn.textContent = "Connect"; }
-    if (e.code === 401) return gateErr("That passphrase doesn't match. Try again.");
+    if (btn) { btn.disabled = false; btn.textContent = "Enter"; }
+    if (e.code === 401) return gateErr("Wrong passcode. Try again.");
     return gateErr("Couldn't reach the server. Check your connection, or use offline mode.");
   }
 }
@@ -2651,7 +2652,7 @@ async function doConnect() {
     setCloud("saved");
     startAuth();
   } catch (e) {
-    if (e.code === 401) { setStateSecret(""); renderConnect("Your saved passphrase was rejected — enter it again."); return; }
+    if (e.code === 401) { setStateSecret(""); renderConnect("Saved passcode was rejected — enter it again."); return; }
     setCloud("error"); startAuth();                    // offline: fall back to local data
   }
 })();
