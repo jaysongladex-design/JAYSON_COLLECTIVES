@@ -1193,6 +1193,12 @@ function migrateEntry(e) {
   e.bookings.forEach((b) => {            // keep the guest list length == pax
     if (!Array.isArray(b.guests)) b.guests = [];
     if (!Array.isArray(b.payments)) b.payments = [];
+    // backfill a "recorded" start date for historical bookings (earliest payment) so they
+    // show as Recorded, not Draft; brand-new empty bookings stay Draft until you click Proceed.
+    if (!b.recordedAt) {
+      const firstPay = b.payments.map((p) => p.date).filter(Boolean).sort()[0];
+      if (firstPay) b.recordedAt = firstPay;
+    }
     const n = Math.max(0, num(b.pax));
     if (b.guests.length < n) while (b.guests.length < n) b.guests.push("");
     else if (b.guests.length > n) b.guests.length = n;
@@ -2179,6 +2185,7 @@ function renderBookings() {
         <span class="b-meta">${(b.refCode || b.refNum) ? esc(((b.refCode || "") + " " + (b.refNum || "")).trim()) + " · " : ""}${qty(b.pax)} pax · ${money(b.srp)} SRP</span>
         <span class="b-bal">Bal ${money(bal)}</span>
         <span class="sttag ${bkClass(st)}">${st}</span>
+        ${b.recordedAt ? `<span class="sttag" style="background:#e6f4ec;color:#17794a" title="Recorded ${esc(b.recordedAt)}">✔ Recorded</span>` : `<span class="sttag" style="background:#fdf3e0;color:#9a6a12" title="Not yet recorded — open it and click Proceed">Draft</span>`}
         <span class="chev">${open ? "▾" : "▸"}</span>
       </div>
       ${open ? `<div class="b-body">
@@ -2206,7 +2213,10 @@ function renderBookings() {
           <button class="btn-add" data-bkaddpay="${b.id}">＋ Add Payment</button>
         </div>
         <label class="f" style="margin-top:9px"><span>Remarks</span><input data-bk="${b.id}" data-bkf="remarks" type="text" value="${esc(b.remarks || "")}" placeholder="optional"></label>
-        ${isAdmin() ? `<div style="margin-top:9px"><button data-bkdel="${b.id}" style="background:#C0453B;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:700;font-size:12px;cursor:pointer">🗑 Delete booking</button></div>` : ""}
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:12px">
+          <div>${isAdmin() ? `<button data-bkdel="${b.id}" style="background:#C0453B;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:700;font-size:12px;cursor:pointer">🗑 Delete booking</button>` : ""}</div>
+          <button data-bkproceed="${b.id}" style="background:#16305f;color:#fff;border:none;border-radius:9px;padding:10px 24px;font-weight:800;font-size:13.5px;cursor:pointer;box-shadow:0 1px 3px rgba(20,40,80,.25)">${b.recordedAt ? "✔ Update &amp; Close" : "Proceed →"}</button>
+        </div>
       </div>` : ""}
     </div>`;
   }).join("") : `<div class="empty">No bookings yet. Add the first Facebook Name below.</div>`;
@@ -2330,6 +2340,22 @@ function addBooking() {
   save(); renderEditor(); renderTree();
 }
 function toggleBooking(id) { if (expandedBk.has(id)) expandedBk.delete(id); else expandedBk.add(id); renderBookings(); }
+/** Finalize a booking: validate, stamp its start date the first time, then collapse it. */
+function proceedBooking(id) {
+  const e = current(); if (!e) return;
+  const b = (e.bookings || []).find((x) => x.id === id); if (!b) return;
+  if (!String(b.fbName || "").trim()) {
+    alert("Enter the Facebook Name before you proceed.");
+    const i = document.querySelector(`[data-bk="${id}"][data-bkf="fbName"]`); if (i) i.focus(); return;
+  }
+  if (num(b.pax) < 1) {
+    alert("Enter the pax availed (1 or more) before you proceed.");
+    const i = document.querySelector(`[data-bk="${id}"][data-bkf="pax"]`); if (i) i.focus(); return;
+  }
+  if (!b.recordedAt) b.recordedAt = todayISO(); // capture the start of this booking
+  expandedBk.delete(id);                        // finalize: collapse the card, re-open the add form
+  save(); renderEditor(); renderTree();
+}
 function updateBookingField(id, field, value, commit) {
   const e = current(); const b = bkFind(id); if (!e || !b) return;
   if (field === "pax") {
@@ -2624,6 +2650,7 @@ document.getElementById("editor").addEventListener("click", (ev) => {
   if (ev.target.closest("[data-addpay]")) return addPayment();
   if (ev.target.closest("[data-addbooking]")) return addBooking();
   if (ev.target.closest("[data-openingfill]")) return recordOpening();
+  const bpr = ev.target.closest("[data-bkproceed]"); if (bpr) return proceedBooking(bpr.dataset.bkproceed);
   const bt = ev.target.closest("[data-bktoggle]"); if (bt) return toggleBooking(bt.dataset.bktoggle);
   const bap = ev.target.closest("[data-bkaddpay]"); if (bap) return addBookingPayment(bap.dataset.bkaddpay);
   const bdel = ev.target.closest("[data-bkdel]"); if (bdel) return deleteBooking(bdel.dataset.bkdel);
