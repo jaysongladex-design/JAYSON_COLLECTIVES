@@ -1126,7 +1126,9 @@ const ADMIN_ID = "u-admin-default";
 function seedDB() {
   return {
     version: 1,
-    updatedAt: new Date().toISOString(),
+    // Empty on purpose: a fresh seed must count as OLDER than any real cloud data,
+    // so connecting adopts the server instead of overwriting it with a blank seed.
+    updatedAt: "",
     users: [{ id: ADMIN_ID, name: "Administrator", role: "admin" }],
     currentUserId: ADMIN_ID,
     packageColors: {},
@@ -1214,7 +1216,11 @@ function load() {
       if (d && Array.isArray(d.entries)) { d.entries = d.entries.map(migrateEntry).filter(Boolean); return migrateUsers(d); }
     }
   } catch (e) { console.warn("load failed", e); }
-  return seedDB();
+  // Run the seed through the same migration so its opening sales become bookings
+  // (otherwise Slots Sold / Collected read 0 until the first real edit).
+  const s = seedDB();
+  s.entries = s.entries.map(migrateEntry).filter(Boolean);
+  return migrateUsers(s);
 }
 let DB = load();
 let sel = { id: null, pkg: null, q: "" };
