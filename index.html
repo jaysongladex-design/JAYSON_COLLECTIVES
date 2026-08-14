@@ -1933,7 +1933,6 @@ function renderPackageDashboard(host) {
   if (statDest !== "all") list = list.filter((e) => destTypeOf(e) === statDest);
   if (statStatus === "pending") list = list.filter((e) => !travelCompleted(e));
   else if (statStatus === "completed") list = list.filter((e) => travelCompleted(e));
-  const showFund = all && !statFrom && !statTo && statDest === "all" && statStatus === "all"; // revolving pool = whole-business snapshot
   const titleTxt = all ? "All Packages" : (selected.length === 1 ? selected[0] : selected.length + " packages selected");
   const voided = list.filter((e) => stOf(e) === "VOID");
   const live = list.filter((e) => stOf(e) !== "VOID"); // VOID drops out of the totals
@@ -1946,7 +1945,7 @@ function renderPackageDashboard(host) {
   });
   const roi = t.cost ? (t.profit / t.cost) * 100 : 0;
   const sell = t.slots ? (t.sold / t.slots) * 100 : 0;
-  const f = revolvingFund(); // global working-capital pool (whole business, VOID excluded)
+  const f = revolvingFund(list); // working-capital pool for the current view (respects the filters)
   const pkgs = new Set(list.map((e) => e.package).filter(Boolean)).size;
   const cnt = (s) => list.filter((e) => stOf(e) === s).length;
   const tile = (l, v, c) => `<div class="tile ${c || ""}"><div class="t-l">${l}</div><div class="t-v">${v}</div></div>`;
@@ -1988,7 +1987,7 @@ function renderPackageDashboard(host) {
         ${tile("ROI", roi.toFixed(2) + "%", roi >= 0 ? "green" : "red")}
       </div>
     </section>
-${showFund ? `
+${all ? `
     <section class="card">
       <h3>Revolving budget</h3>
       <p class="sub">Your working-capital pool for buying collective slots — <b>seed money + collected from pax − paid to suppliers</b>. Set your seed in <b>⚙ Settings → Revolving budget</b>.</p>
