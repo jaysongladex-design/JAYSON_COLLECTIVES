@@ -2150,7 +2150,9 @@ function deletePackage() {
   const inPkg = DB.entries.filter((e) => e.package === pkg);
   const count = inPkg.length;
   if (!confirm(`Delete the package "${pkg}"?\n\nThis permanently removes ${count} tour code${count === 1 ? "" : "s"} and all their payments and slots-sold history.\n\nThis cannot be undone.`)) return;
-  if (count > 0 && !confirm(`Last check — really delete "${pkg}" and its ${count} departure${count === 1 ? "" : "s"} for good?`)) return;
+  const code = prompt(`Enter the passcode to permanently delete "${pkg}"${count ? ` and its ${count} departure${count === 1 ? "" : "s"}` : ""}:`);
+  if (code === null) return;                                                        // cancelled
+  if (code.trim() !== "GLADEX123") { alert("Wrong passcode — the package was NOT deleted."); return; }
   DB.entries = DB.entries.filter((e) => e.package !== pkg);
   if (DB.packageColors) delete DB.packageColors[pkg];
   if (DB.packageTypes) delete DB.packageTypes[pkg];
