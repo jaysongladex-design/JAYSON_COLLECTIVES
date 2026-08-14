@@ -55,6 +55,26 @@
   .dd-opt .c{font-size:10px;color:var(--muted);background:#EEF2F8;border-radius:20px;padding:1px 7px;font-weight:700;flex:0 0 auto}
   .dd-opt.active .c{background:rgba(255,255,255,.22);color:#fff}
   .dd-opt.all{font-weight:800;border-bottom:1px solid var(--line);margin-bottom:4px;padding-bottom:9px}
+  /* NAME OF PACKAGES filter (inside the dashboard) */
+  .pkgfilter{margin:0 0 14px}
+  .pf-label{font-size:11px;font-weight:800;letter-spacing:.06em;color:var(--muted);margin-bottom:5px}
+  .pf-dd{position:relative;max-width:380px}
+  .pf-btn{width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:9px;padding:9px 12px;font:600 13px inherit;color:var(--ink);cursor:pointer}
+  .pf-btn:hover{border-color:var(--navy)}
+  .pf-chev{color:var(--muted)}
+  .pf-panel{position:absolute;z-index:40;top:calc(100% + 5px);left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(20,40,80,.16);padding:9px}
+  .pf-search{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:7px;padding:7px 9px;font:inherit;font-size:12.5px;margin-bottom:7px}
+  .pf-all{width:100%;text-align:left;background:#F2F7FD;border:none;border-radius:7px;padding:8px 9px;cursor:pointer;font:700 12.5px inherit;color:var(--navy);margin-bottom:5px}
+  .pf-all.active{background:var(--navy);color:#fff}
+  .pf-list{max-height:240px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+  .pf-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;cursor:pointer;font-size:12.5px}
+  .pf-row:hover{background:#F2F7FD}
+  .pf-row input{width:15px;height:15px;cursor:pointer;flex:0 0 auto}
+  .pf-row .nm{flex:1}
+  .pf-c{font-size:10px;color:var(--muted);background:#EEF2F8;border-radius:20px;padding:1px 7px;font-weight:700;flex:0 0 auto}
+  .pf-actions{display:flex;gap:8px;margin-top:8px;border-top:1px solid var(--line);padding-top:8px}
+  .pf-actions button{flex:1;background:#fff;border:1px solid var(--line);border-radius:7px;padding:7px;font:700 12px inherit;color:var(--navy);cursor:pointer}
+  .pf-actions button:hover{background:#F2F7FD}
   /* sell-through bar on the main-panel dashboard */
   .pbar{height:8px;border-radius:4px;background:#E8EDF5;overflow:hidden;margin-top:12px}
   .pbar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--gold3))}
@@ -313,10 +333,6 @@
   <div class="actions">
     <span class="saved" id="saveStatus"><i class="dot"></i> Saved</span>
     <span class="saved" id="cloudStatus"></span>
-    <button class="btn" onclick="exportCSV()">⤓ Export CSV</button>
-    <button class="btn" onclick="exportPayments()">⤓ Payments CSV</button>
-    <button class="btn admin-only" onclick="document.getElementById('csvInput').click()">⬆ Import CSV</button>
-    <button class="btn danger admin-only" onclick="resetAll()">↺ Reset to file data</button>
     <span class="who" id="whoChip"></span>
     <button class="btn gold" onclick="openSettings()">⚙ Settings</button>
     <button class="btn" onclick="signOut()" title="Sign out">⎋ Sign out</button>
@@ -326,7 +342,6 @@
 
 <div class="app">
   <aside class="sidebar">
-    <input class="search" id="search" placeholder="Search package or tour code…" />
     <div class="dd" id="statsDD">
       <button class="dd-btn" id="statsBtn"></button>
       <div class="dd-panel" id="statsPanel"></div>
@@ -1549,6 +1564,19 @@ function renderSettings() {
     </div>
 
     <div class="sec">
+      <h4>Data Management</h4>
+      <p class="h">Export your data to spreadsheets, import a CSV, or reset back to the original file data.
+        These moved here from the top bar to keep the main screen clean.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-add" onclick="exportCSV()">⤓ Export CSV</button>
+        <button class="btn-lite" onclick="exportPayments()">⤓ Payments CSV</button>
+        ${admin ? `<button class="btn-lite" onclick="document.getElementById('csvInput').click()">⬆ Import CSV</button>
+        <button class="btn-lite" onclick="resetAll()" style="border-color:#e0a9a2;color:#b23c30">↺ Reset to file data</button>` : ""}
+      </div>
+      ${admin ? `<p class="h" style="margin-top:7px"><b>Reset to file data</b> discards ALL your edits and reloads the original data — it asks you to confirm first.</p>` : `<p class="h" style="margin-top:7px">Only admins can import or reset data.</p>`}
+    </div>
+
+    <div class="sec">
       <h4>Permissions</h4>
       <div class="perm"><table>
         <thead><tr><th>Action</th><th style="text-align:center">Admin</th><th style="text-align:center">Regular</th></tr></thead>
@@ -1792,31 +1820,63 @@ document.getElementById("settingsOvl").addEventListener("click", (ev) => {
 
 /* ============================== sidebar ============================== */
 /* ===== dashboard dropdown (sidebar) ===== */
-let statsPkg = null;    // null = nothing picked yet -> dashboard hidden
-let statsOpen = false;  // is the package list popped open?
+let statsPkg = null;          // null = dashboard hidden; "__ALL__" = dashboard is showing
+let statsSel = new Set();     // NAME OF PACKAGES filter: selected package names (empty = All)
+let statsFilterOpen = false;  // is the package-filter dropdown open?
+let statsFilterQ = "";        // search text inside that dropdown
 
+// Sidebar button: one tap opens the All-Packages dashboard (no package-pick step).
 function renderStatsDD() {
   const btn = document.getElementById("statsBtn");
-  btn.className = "dd-btn" + (statsOpen ? " open" : "");
-  btn.innerHTML = statsPkg
-    ? `📊 ${esc(statsPkg === "__ALL__" ? "All packages" : statsPkg)}<span class="sub">DASHBOARD — TAP TO CHANGE</span>`
-    : `📊 Dashboard<span class="sub">TAP TO PICK A PACKAGE</span>`;
+  const on = statsPkg === "__ALL__";
+  btn.className = "dd-btn" + (on ? " open" : "");
+  btn.innerHTML = `📊 All Packages<span class="sub">${on ? "DASHBOARD — SHOWING" : "TAP TO OPEN DASHBOARD"}</span>`;
   const panel = document.getElementById("statsPanel");
-  panel.className = "dd-panel" + (statsOpen ? " open" : "");
-  panel.innerHTML =
-    `<button class="dd-opt all ${statsPkg === "__ALL__" ? "active" : ""}" data-statpkg="__ALL__">
-       <span>All packages</span><span class="c">${DB.entries.length}</span></button>` +
-    allPackages().map((p) => {
-      const n = DB.entries.filter((e) => e.package === p).length;
-      return `<button class="dd-opt ${statsPkg === p ? "active" : ""}" data-statpkg="${esc(p)}">
-                <span>${esc(p)}</span><span class="c">${n}</span></button>`;
-    }).join("");
+  if (panel) { panel.className = "dd-panel"; panel.innerHTML = ""; }
+}
+/** Live-filter the checkbox rows in the NAME OF PACKAGES dropdown (no re-render, keeps focus). */
+function filterStatPkgList(q) {
+  statsFilterQ = q;
+  const ql = String(q || "").trim().toLowerCase();
+  document.querySelectorAll("[data-statpkgrow]").forEach((row) => {
+    const name = (row.getAttribute("data-statpkgrow") || "").toLowerCase();
+    row.style.display = (!ql || name.includes(ql)) ? "" : "none";
+  });
 }
 
-/** Full-width dashboard for the package chosen in the dropdown — renders in the MAIN panel. */
+/** The "NAME OF PACKAGES" searchable multi-select filter shown at the top of the dashboard. */
+function renderPkgFilter(all, selected, allNames) {
+  const btnLabel = all ? "All packages" : (selected.length === 1 ? selected[0] : selected.length + " packages");
+  const ql = statsFilterQ.trim().toLowerCase();
+  const rows = allNames.map((p) => {
+    const on = statsSel.has(p);
+    const hit = !ql || p.toLowerCase().includes(ql);
+    const n = DB.entries.filter((e) => e.package === p).length;
+    return `<label class="pf-row" data-statpkgrow="${esc(p)}"${hit ? "" : ' style="display:none"'}>
+        <input type="checkbox" data-statpkgcheck="${esc(p)}" ${on ? "checked" : ""}>
+        <span class="nm">${esc(p)}</span><span class="pf-c">${n}</span></label>`;
+  }).join("");
+  return `<div class="pkgfilter">
+      <div class="pf-label">NAME OF PACKAGES</div>
+      <div class="pf-dd">
+        <button class="pf-btn" data-statfilter-toggle="1"><span>${esc(btnLabel)}</span><span class="pf-chev">▾</span></button>
+        ${statsFilterOpen ? `<div class="pf-panel">
+          <input class="pf-search" id="statPkgSearch" placeholder="Search packages…" value="${esc(statsFilterQ)}" oninput="filterStatPkgList(this.value)" autocomplete="off">
+          <button class="pf-all ${statsSel.size === 0 ? "active" : ""}" data-statfilter-all="1">${statsSel.size === 0 ? "✓ " : ""}All packages</button>
+          <div class="pf-list">${rows || `<div class="empty">No matches.</div>`}</div>
+          <div class="pf-actions"><button data-statfilter-selectall="1">Select all</button><button data-statfilter-clear="1">Clear</button></div>
+        </div>` : ""}
+      </div>
+    </div>`;
+}
+/** Full-width dashboard for the selected package(s) — renders in the MAIN panel. */
 function renderPackageDashboard(host) {
-  const all = statsPkg === "__ALL__";
-  const list = all ? DB.entries : DB.entries.filter((e) => e.package === statsPkg);
+  const allNames = allPackages();
+  const selected = statsSel.size ? allNames.filter((p) => statsSel.has(p)) : allNames.slice();
+  const all = statsSel.size === 0 || statsSel.size >= allNames.length; // whole-business view
+  const multi = selected.length !== 1;   // show the Package column unless exactly one package is chosen
+  const list = all ? DB.entries : DB.entries.filter((e) => statsSel.has(e.package));
+  const titleTxt = all ? "All Packages" : (selected.length === 1 ? selected[0] : selected.length + " packages selected");
   const voided = list.filter((e) => stOf(e) === "VOID");
   const live = list.filter((e) => stOf(e) !== "VOID"); // VOID drops out of the totals
   const t = { cost: 0, paid: 0, bal: 0, coll: 0, recv: 0, profit: 0, slots: 0, sold: 0, rem: 0 };
@@ -1833,9 +1893,10 @@ function renderPackageDashboard(host) {
   const cnt = (s) => list.filter((e) => stOf(e) === s).length;
   const tile = (l, v, c) => `<div class="tile ${c || ""}"><div class="t-l">${l}</div><div class="t-v">${v}</div></div>`;
   host.innerHTML = `
+    ${renderPkgFilter(all, selected, allNames)}
     <div class="ed-head">
-      <div><h2>${esc(all ? "All Packages" : statsPkg)}</h2>
-        <div class="code">PACKAGE DASHBOARD &middot; ${qty(live.length)} ACTIVE DEPARTURE${live.length === 1 ? "" : "S"}${all ? ` &middot; ${qty(pkgs)} PACKAGES` : ""}</div></div>
+      <div><h2>${esc(titleTxt)}</h2>
+        <div class="code">PACKAGE DASHBOARD &middot; ${qty(live.length)} ACTIVE DEPARTURE${live.length === 1 ? "" : "S"}${multi ? ` &middot; ${qty(pkgs)} PACKAGES` : ""}</div></div>
       <div class="st-wrap">
         <span class="sttag st-pending">${qty(cnt("PENDING"))} pending</span>
         <span class="sttag st-finished">${qty(cnt("FINISHED"))} finished</span>
@@ -1845,7 +1906,7 @@ function renderPackageDashboard(host) {
 
     <section class="card">
       <h3>Slots</h3>
-      <p class="sub">Inventory across ${all ? "every package" : "this package"}.${voided.length ? ` <b>${qty(voided.length)} VOID departure${voided.length === 1 ? "" : "s"} excluded from all totals below.</b>` : ""}</p>
+      <p class="sub">Inventory across ${all ? "every package" : (selected.length === 1 ? "this package" : "the selected packages")}.${voided.length ? ` <b>${qty(voided.length)} VOID departure${voided.length === 1 ? "" : "s"} excluded from all totals below.</b>` : ""}</p>
       <div class="tiles">
         ${tile("Departures", qty(live.length))}
         ${tile("Total Slots", qty(t.slots))}
@@ -1889,13 +1950,13 @@ ${all ? `
       <p class="sub">Click any row to open it.</p>
       <div style="overflow-x:auto">
       <table><thead><tr>
-        ${all ? "<th>Package</th>" : ""}<th>Tour Code</th><th>Status</th><th>Travel Date</th>
+        ${multi ? "<th>Package</th>" : ""}<th>Tour Code</th><th>Status</th><th>Travel Date</th>
         <th class="num">Slots</th><th class="num">Sold</th><th class="num">Left</th>
         <th class="num">Cost</th><th class="num">Paid</th><th class="num">Balance</th>
         <th class="num">Collected</th><th class="num">Profit</th><th class="num">ROI</th>
       </tr></thead><tbody>
         ${list.map((e) => { const d = derive(e); const s = stOf(e); return `<tr data-open="${e.id}" style="cursor:pointer" class="${s === "VOID" ? "voided" : ""}">
-          ${all ? `<td>${esc(e.package || "(no package)")}</td>` : ""}
+          ${multi ? `<td>${esc(e.package || "(no package)")}</td>` : ""}
           <td><span class="pkg-name">${esc(e.tourCode || "(untitled)")}</span></td>
           <td><span class="sttag ${stClass(s)}">${s}</span></td>
           <td>${esc(e.travelRaw || "—")}</td>
@@ -1908,10 +1969,10 @@ ${all ? `
           <td class="num">${money(d.collected)}</td>
           <td class="num ${d.profit >= 0 ? "pos" : "neg"}">${money(d.profit)}</td>
           <td class="num ${d.roi >= 0 ? "" : "neg"}">${d.roi.toFixed(2)}%</td>
-        </tr>`; }).join("") || `<tr><td colspan="13" style="text-align:center;padding:22px;color:var(--muted)">No departures in this package.</td></tr>`}
+        </tr>`; }).join("") || `<tr><td colspan="${multi ? 13 : 12}" style="text-align:center;padding:22px;color:var(--muted)">No departures for this selection.</td></tr>`}
       </tbody>
       <tfoot><tr class="totrow">
-        ${all ? "<td></td>" : ""}<td>TOTAL</td><td>${voided.length ? qty(voided.length) + " void excl." : ""}</td><td>${qty(live.length)} dep</td>
+        ${multi ? "<td></td>" : ""}<td>TOTAL</td><td>${voided.length ? qty(voided.length) + " void excl." : ""}</td><td>${qty(live.length)} dep</td>
         <td class="num">${qty(t.slots)}</td><td class="num">${qty(t.sold)}</td><td class="num">${qty(t.rem)}</td>
         <td class="num">${money(t.cost)}</td><td class="num">${money(t.paid)}</td><td class="num">${money(t.bal)}</td>
         <td class="num">${money(t.coll)}</td><td class="num">${money(t.profit)}</td><td class="num">${roi.toFixed(2)}%</td>
@@ -2008,7 +2069,7 @@ function savePkgCfg() {
     DB.entries.forEach((e) => { if (e.package === oldName) e.package = newName; });
     delete DB.packageColors[oldName];
     if (sel.pkg === oldName) sel.pkg = newName;
-    if (statsPkg === oldName) statsPkg = newName;
+    if (statsSel.has(oldName)) { statsSel.delete(oldName); statsSel.add(newName); } // keep the dashboard filter in sync
   }
   if (clearColor) delete DB.packageColors[newName];
   else DB.packageColors[newName] = color;
@@ -2025,7 +2086,7 @@ function deletePackage() {
   if (DB.packageColors) delete DB.packageColors[pkg];
   if (sel.pkg === pkg) sel.pkg = null;
   if (sel.id && !DB.entries.some((e) => e.id === sel.id)) sel.id = null;
-  if (statsPkg === pkg) statsPkg = null;
+  statsSel.delete(pkg); // drop it from the dashboard filter if it was selected
   save(); closePkgCfg(); renderStatsDD(); renderTree(); renderEditor();
 }
 
@@ -2435,8 +2496,9 @@ function recordOpening() {
 function resetAll() {
   if (!isAdmin()) { alert(DENY); return; }
   if (!confirm("Discard ALL your edits and reload the original data from the uploaded file?\n\nThis cannot be undone.")) return;
-  DB = seedDB(); sel = { id: null, pkg: null, q: "" };
-  document.getElementById("search").value = "";
+  DB = seedDB();
+  DB.entries = DB.entries.map(migrateEntry).filter(Boolean); DB = migrateUsers(DB); // match load(): opening sales -> bookings
+  sel = { id: null, pkg: null, q: "" }; statsSel = new Set(); statsFilterOpen = false;
   save(); renderTree(); renderEditor();
 }
 
@@ -2612,6 +2674,11 @@ document.getElementById("editor").addEventListener("input", (ev) => {
   }
 });
 document.getElementById("editor").addEventListener("change", (ev) => {
+  if (ev.target.dataset.statpkgcheck !== undefined) {   // NAME OF PACKAGES checkbox toggled
+    const p = ev.target.dataset.statpkgcheck;
+    if (ev.target.checked) statsSel.add(p); else statsSel.delete(p);
+    renderStatsDD(); renderEditor(); return;
+  }
   if (ev.target.dataset.bk !== undefined && ev.target.dataset.bkf) return updateBookingField(ev.target.dataset.bk, ev.target.dataset.bkf, ev.target.value, true); // blur -> commit
   if (ev.target.tagName !== "SELECT") return;
   if (ev.target.dataset.field !== "package") return;
@@ -2628,6 +2695,12 @@ document.getElementById("editor").addEventListener("change", (ev) => {
   save(); sel.pkg = e.package; renderTree(); renderEditor();
 });
 document.getElementById("editor").addEventListener("click", (ev) => {
+  // NAME OF PACKAGES filter (dashboard)
+  if (ev.target.closest("[data-statfilter-toggle]")) { ev.stopPropagation(); statsFilterOpen = !statsFilterOpen; if (!statsFilterOpen) statsFilterQ = ""; renderEditor(); return; }
+  if (ev.target.closest("[data-statfilter-all]")) { ev.stopPropagation(); statsSel.clear(); renderStatsDD(); renderEditor(); return; }
+  if (ev.target.closest("[data-statfilter-selectall]")) { ev.stopPropagation(); statsSel = new Set(allPackages()); renderStatsDD(); renderEditor(); return; }
+  if (ev.target.closest("[data-statfilter-clear]")) { ev.stopPropagation(); statsSel.clear(); renderStatsDD(); renderEditor(); return; }
+  if (ev.target.closest(".pf-panel")) { ev.stopPropagation(); return; } // clicks inside the open dropdown (checkbox labels) stay open
   const open = ev.target.closest("[data-open]");            // dashboard table row -> open that departure
   if (open) return selectEntry(open.dataset.open);
   const v = ev.target.closest("[data-void]");               // VOID is the only manual status
@@ -2658,21 +2731,17 @@ document.getElementById("editor").addEventListener("click", (ev) => {
   const dp = ev.target.closest("[data-delpay]");
   if (dp) return deletePayment(dp.dataset.delpay);
 });
-document.getElementById("search").addEventListener("input", (ev) => { sel.q = ev.target.value; renderTree(); });
-
-/* dashboard dropdown: button toggles the package list; picking one shows its dashboard */
+/* Sidebar dashboard button: one tap opens the All-Packages dashboard (no pick step). */
 document.getElementById("statsBtn").addEventListener("click", (ev) => {
-  ev.stopPropagation(); statsOpen = !statsOpen; renderStatsDD();
-});
-document.getElementById("statsPanel").addEventListener("click", (ev) => {
-  const b = ev.target.closest("[data-statpkg]"); if (!b) return;
   ev.stopPropagation();
-  statsPkg = b.dataset.statpkg; statsOpen = false;
-  sel.id = null; editing = false;              // drop the tour code so the dashboard takes the main panel
-  if (statsPkg !== "__ALL__") sel.pkg = statsPkg; // expand that package in the tree too
+  statsPkg = "__ALL__";
+  sel.id = null; editing = false;   // free the main panel for the dashboard
   renderStatsDD(); renderTree(); renderEditor();
 });
-document.addEventListener("click", () => { if (statsOpen) { statsOpen = false; renderStatsDD(); } });
+/* Close the NAME OF PACKAGES dropdown when clicking outside it. */
+document.addEventListener("click", (ev) => {
+  if (statsFilterOpen && !ev.target.closest(".pf-dd")) { statsFilterOpen = false; renderEditor(); }
+});
 
 /* ============================== boot ============================== */
 // Nothing renders until someone signs in. On first run, the admin account is created here.
