@@ -1508,7 +1508,7 @@ const PERMS = [
   ["Add payment to supplier", 1, 1], ["Add slots sold / availed", 1, 1], ["Export CSV", 1, 1],
   ["Edit the frozen Details fields", 1, 0], ["Add / change package", 1, 0], ["Add tour code", 1, 0],
   ["Delete a payment or sale", 1, 0], ["Delete a tour code", 1, 0],
-  ["Import CSV / Reset to file data", 1, 0], ["Manage users", 1, 0],
+  ["Import CSV", 1, 0], ["Manage users", 1, 0],
 ];
 function renderSettings() {
   const me = currentUser(), admin = isAdmin();
@@ -1591,15 +1591,14 @@ function renderSettings() {
 
     <div class="sec">
       <h4>Data Management</h4>
-      <p class="h">Export your data to spreadsheets, import a CSV, or reset back to the original file data.
+      <p class="h">Export your data to spreadsheets or import a CSV.
         These moved here from the top bar to keep the main screen clean.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn-add" onclick="exportCSV()">⤓ Export CSV</button>
         <button class="btn-lite" onclick="exportPayments()">⤓ Payments CSV</button>
-        ${admin ? `<button class="btn-lite" onclick="document.getElementById('csvInput').click()">⬆ Import CSV</button>
-        <button class="btn-lite" onclick="resetAll()" style="border-color:#e0a9a2;color:#b23c30">↺ Reset to file data</button>` : ""}
+        ${admin ? `<button class="btn-lite" onclick="document.getElementById('csvInput').click()">⬆ Import CSV</button>` : ""}
       </div>
-      ${admin ? `<p class="h" style="margin-top:7px"><b>Reset to file data</b> discards ALL your edits and reloads the original data — it asks you to confirm first.</p>` : `<p class="h" style="margin-top:7px">Only admins can import or reset data.</p>`}
+      ${admin ? "" : `<p class="h" style="margin-top:7px">Only admins can import data.</p>`}
     </div>
 
     <div class="sec">
@@ -2564,16 +2563,6 @@ function recordOpening() {
   }
   save(); renderEditor(); renderTree();
 }
-function resetAll() {
-  if (!isAdmin()) { alert(DENY); return; }
-  if (!confirm("Discard ALL your edits and reload the original data from the uploaded file?\n\nThis cannot be undone.")) return;
-  DB = seedDB();
-  DB.entries = DB.entries.map(migrateEntry).filter(Boolean); DB = migrateUsers(DB); // match load(): opening sales -> bookings
-  sel = { id: null, pkg: null, q: "" }; statsSel = new Set(); statsFilterOpen = false;
-  statFrom = ""; statTo = ""; statDest = "all"; statStatus = "all"; statsFilterQ = "";
-  save(); renderTree(); renderEditor();
-}
-
 /* ============================== CSV ============================== */
 const cell = (v) => { v = v == null ? "" : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
 function dl(fn, content) {
