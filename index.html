@@ -75,6 +75,15 @@
   .pf-actions{display:flex;gap:8px;margin-top:8px;border-top:1px solid var(--line);padding-top:8px}
   .pf-actions button{flex:1;background:#fff;border:1px solid var(--line);border-radius:7px;padding:7px;font:700 12px inherit;color:var(--navy);cursor:pointer}
   .pf-actions button:hover{background:#F2F7FD}
+  /* dashboard filter bar (below the header, above Slots) */
+  .filterbar{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:flex-end;margin:0 0 16px;padding:13px 16px;background:#F6F9FD;border:1px solid var(--line);border-radius:12px}
+  .fb-cell{display:flex;flex-direction:column;gap:5px}
+  .fb-sel,.fb-date{border:1px solid var(--line);border-radius:9px;padding:8px 10px;font:600 13px inherit;color:var(--ink);background:#fff;cursor:pointer}
+  .fb-dates{display:flex;align-items:center;gap:6px}
+  .fb-dates span{color:var(--muted)}
+  .fb-clear{margin-left:auto;justify-content:flex-end}
+  .fb-clear button{background:#fff;border:1px solid var(--line);border-radius:9px;padding:9px 14px;font:700 12.5px inherit;color:var(--navy);cursor:pointer}
+  .fb-clear button:hover{background:#fff2f0;border-color:#e0a9a2;color:#b23c30}
   /* sell-through bar on the main-panel dashboard */
   .pbar{height:8px;border-radius:4px;background:#E8EDF5;overflow:hidden;margin-top:12px}
   .pbar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--gold3))}
@@ -1126,6 +1135,19 @@ function travelEndOf(e) {
   return d;
 }
 const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+/** Start of the travel range: "5/16/2026 - 5/21/2026" -> 16 May 2026. */
+function travelStartOf(e) {
+  const raw = ("" + ((e && e.travelRaw) || "")).trim();
+  if (!raw) return null;
+  const d = new Date((raw.split(/\s+-\s+/)[0] || "").trim());
+  if (isNaN(d)) return null;
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+/** True once the travel date has passed (Completed); future/undated = Pending. */
+function travelCompleted(e) { const end = travelEndOf(e); return !!(end && end < startOfToday()); }
+/** International (default) vs Domestic — set per package in its settings. */
+const destTypeOf = (e) => (DB.packageTypes && DB.packageTypes[e.package]) || "international";
 function stOf(e) {
   if (e && e.voided) return "VOID";
   const end = travelEndOf(e);
@@ -1149,6 +1171,7 @@ function seedDB() {
     users: [{ id: ADMIN_ID, name: "Administrator", role: "admin" }],
     currentUserId: ADMIN_ID,
     packageColors: {},
+    packageTypes: {},    // { [packageName]: "international" | "domestic" } — default international
     budget: { seed: 0 }, // revolving working-capital pool (Settings → Revolving budget)
     entries: SEED.map((r) => ({
       id: uid(),
@@ -1230,6 +1253,7 @@ function migrateUsers(d) {
   if (!d.users.some((u) => u.role === "admin")) d.users[0].role = "admin"; // never lock everyone out
   if (!d.users.some((u) => u.id === d.currentUserId)) d.currentUserId = d.users[0].id;
   if (!d.packageColors || typeof d.packageColors !== "object") d.packageColors = {};
+  if (!d.packageTypes || typeof d.packageTypes !== "object") d.packageTypes = {};
   // revolving-budget pool: keep an extensible object (seed now; alert threshold etc. later)
   if (!d.budget || typeof d.budget !== "object") d.budget = { seed: 0 };
   d.budget.seed = num(String(d.budget.seed).replace(/,/g, ""));
@@ -1824,6 +1848,10 @@ let statsPkg = null;          // null = dashboard hidden; "__ALL__" = dashboard 
 let statsSel = new Set();     // NAME OF PACKAGES filter: selected package names (empty = All)
 let statsFilterOpen = false;  // is the package-filter dropdown open?
 let statsFilterQ = "";        // search text inside that dropdown
+let statFrom = "";            // TRAVEL DATE RANGE — from (ISO yyyy-mm-dd, "" = no lower bound)
+let statTo = "";              // TRAVEL DATE RANGE — to   (ISO yyyy-mm-dd, "" = no upper bound)
+let statDest = "all";         // DESTINATION TYPE — "all" | "international" | "domestic"
+let statStatus = "all";       // TRAVEL STATUS — "all" | "pending" | "completed"
 
 // Sidebar button: one tap opens the All-Packages dashboard (no package-pick step).
 function renderStatsDD() {
@@ -1844,8 +1872,8 @@ function filterStatPkgList(q) {
   });
 }
 
-/** The "NAME OF PACKAGES" searchable multi-select filter shown at the top of the dashboard. */
-function renderPkgFilter(all, selected, allNames) {
+/** The full dashboard filter bar (renders below the header, above Slots). */
+function renderFilters(all, selected, allNames) {
   const btnLabel = all ? "All packages" : (selected.length === 1 ? selected[0] : selected.length + " packages");
   const ql = statsFilterQ.trim().toLowerCase();
   const rows = allNames.map((p) => {
@@ -1856,16 +1884,39 @@ function renderPkgFilter(all, selected, allNames) {
         <input type="checkbox" data-statpkgcheck="${esc(p)}" ${on ? "checked" : ""}>
         <span class="nm">${esc(p)}</span><span class="pf-c">${n}</span></label>`;
   }).join("");
-  return `<div class="pkgfilter">
-      <div class="pf-label">NAME OF PACKAGES</div>
-      <div class="pf-dd">
-        <button class="pf-btn" data-statfilter-toggle="1"><span>${esc(btnLabel)}</span><span class="pf-chev">▾</span></button>
-        ${statsFilterOpen ? `<div class="pf-panel">
-          <input class="pf-search" id="statPkgSearch" placeholder="Search packages…" value="${esc(statsFilterQ)}" oninput="filterStatPkgList(this.value)" autocomplete="off">
-          <button class="pf-all ${statsSel.size === 0 ? "active" : ""}" data-statfilter-all="1">${statsSel.size === 0 ? "✓ " : ""}All packages</button>
-          <div class="pf-list">${rows || `<div class="empty">No matches.</div>`}</div>
-          <div class="pf-actions"><button data-statfilter-selectall="1">Select all</button><button data-statfilter-clear="1">Clear</button></div>
-        </div>` : ""}
+  const opt = (v, cur, label) => `<option value="${v}"${cur === v ? " selected" : ""}>${label}</option>`;
+  const anyFilter = statsSel.size || statFrom || statTo || statDest !== "all" || statStatus !== "all";
+  return `<div class="filterbar">
+      <div class="fb-cell">
+        <div class="pf-label">NAME OF PACKAGES</div>
+        <div class="pf-dd">
+          <button class="pf-btn" data-statfilter-toggle="1"><span>${esc(btnLabel)}</span><span class="pf-chev">▾</span></button>
+          ${statsFilterOpen ? `<div class="pf-panel">
+            <input class="pf-search" id="statPkgSearch" placeholder="Search packages…" value="${esc(statsFilterQ)}" oninput="filterStatPkgList(this.value)" autocomplete="off">
+            <button class="pf-all ${statsSel.size === 0 ? "active" : ""}" data-statfilter-all="1">${statsSel.size === 0 ? "✓ " : ""}All packages</button>
+            <div class="pf-list">${rows || `<div class="empty">No matches.</div>`}</div>
+            <div class="pf-actions"><button data-statfilter-selectall="1">Select all</button><button data-statfilter-clear="1">Clear</button></div>
+          </div>` : ""}
+        </div>
+      </div>
+      <div class="fb-cell">
+        <div class="pf-label">TRAVEL DATE RANGE</div>
+        <div class="fb-dates">
+          <input type="date" class="fb-date" data-statfrom value="${esc(statFrom)}" title="From (travel date)">
+          <span>–</span>
+          <input type="date" class="fb-date" data-statto value="${esc(statTo)}" title="To (travel date)">
+        </div>
+      </div>
+      <div class="fb-cell">
+        <div class="pf-label">DESTINATION TYPE</div>
+        <select class="fb-sel" data-statdest>${opt("all", statDest, "All")}${opt("international", statDest, "International")}${opt("domestic", statDest, "Domestic")}</select>
+      </div>
+      <div class="fb-cell">
+        <div class="pf-label">TRAVEL STATUS</div>
+        <select class="fb-sel" data-statstatus>${opt("all", statStatus, "All")}${opt("pending", statStatus, "Pending Travel Date")}${opt("completed", statStatus, "Completed Travel Date")}</select>
+      </div>
+      <div class="fb-cell fb-clear">
+        <button data-statclear="1"${anyFilter ? "" : ' disabled style="opacity:.5;cursor:default"'}>✕ Clear filters</button>
       </div>
     </div>`;
 }
@@ -1875,7 +1926,14 @@ function renderPackageDashboard(host) {
   const selected = statsSel.size ? allNames.filter((p) => statsSel.has(p)) : allNames.slice();
   const all = statsSel.size === 0 || statsSel.size >= allNames.length; // whole-business view
   const multi = selected.length !== 1;   // show the Package column unless exactly one package is chosen
-  const list = all ? DB.entries : DB.entries.filter((e) => statsSel.has(e.package));
+  let list = all ? DB.entries.slice() : DB.entries.filter((e) => statsSel.has(e.package));
+  // TRAVEL DATE RANGE (overlap) + DESTINATION TYPE + TRAVEL STATUS — all combine (AND)
+  const fromD = statFrom ? parseD(statFrom) : null, toD = statTo ? parseD(statTo) : null;
+  if (fromD || toD) list = list.filter((e) => { const s = travelStartOf(e), en = travelEndOf(e) || travelStartOf(e); if (!s && !en) return false; const a = s || en, b = en || s; return !((toD && a > toD) || (fromD && b < fromD)); });
+  if (statDest !== "all") list = list.filter((e) => destTypeOf(e) === statDest);
+  if (statStatus === "pending") list = list.filter((e) => !travelCompleted(e));
+  else if (statStatus === "completed") list = list.filter((e) => travelCompleted(e));
+  const showFund = all && !statFrom && !statTo && statDest === "all" && statStatus === "all"; // revolving pool = whole-business snapshot
   const titleTxt = all ? "All Packages" : (selected.length === 1 ? selected[0] : selected.length + " packages selected");
   const voided = list.filter((e) => stOf(e) === "VOID");
   const live = list.filter((e) => stOf(e) !== "VOID"); // VOID drops out of the totals
@@ -1893,7 +1951,6 @@ function renderPackageDashboard(host) {
   const cnt = (s) => list.filter((e) => stOf(e) === s).length;
   const tile = (l, v, c) => `<div class="tile ${c || ""}"><div class="t-l">${l}</div><div class="t-v">${v}</div></div>`;
   host.innerHTML = `
-    ${renderPkgFilter(all, selected, allNames)}
     <div class="ed-head">
       <div><h2>${esc(titleTxt)}</h2>
         <div class="code">PACKAGE DASHBOARD &middot; ${qty(live.length)} ACTIVE DEPARTURE${live.length === 1 ? "" : "S"}${multi ? ` &middot; ${qty(pkgs)} PACKAGES` : ""}</div></div>
@@ -1903,6 +1960,7 @@ function renderPackageDashboard(host) {
         <span class="sttag st-void">${qty(cnt("VOID"))} void</span>
       </div>
     </div>
+    ${renderFilters(all, selected, allNames)}
 
     <section class="card">
       <h3>Slots</h3>
@@ -1930,7 +1988,7 @@ function renderPackageDashboard(host) {
         ${tile("ROI", roi.toFixed(2) + "%", roi >= 0 ? "green" : "red")}
       </div>
     </section>
-${all ? `
+${showFund ? `
     <section class="card">
       <h3>Revolving budget</h3>
       <p class="sub">Your working-capital pool for buying collective slots — <b>seed money + collected from pax − paid to suppliers</b>. Set your seed in <b>⚙ Settings → Revolving budget</b>.</p>
@@ -2030,6 +2088,7 @@ function openPkgCfg(pkg) {
   pkgCfgTarget = pkg;
   const count = DB.entries.filter((e) => e.package === pkg).length;
   const color = pkgColor(pkg) || "#1E5AA8";
+  const curType = (DB.packageTypes && DB.packageTypes[pkg]) || "international";
   document.getElementById("pkgSub").textContent = count + " departure" + (count === 1 ? "" : "s") + " in this package";
   document.getElementById("pkgBody").innerHTML = `
     <label class="f"><span>Package name</span>
@@ -2039,6 +2098,12 @@ function openPkgCfg(pkg) {
       <input type="color" id="pkgColor" value="${esc(color)}" style="height:42px;padding:2px;cursor:pointer"></label>
     <div class="swatches">${PKG_SWATCHES.map((c) => `<button class="sw" data-sw="${c}" style="background:${c}" title="${c}"></button>`).join("")}
       <button class="sw" data-sw="" style="background:#fff" title="No color">✕</button></div>
+    <label class="f"><span>Destination type</span>
+      <select id="pkgDest">
+        <option value="international"${curType === "international" ? " selected" : ""}>International</option>
+        <option value="domestic"${curType === "domestic" ? " selected" : ""}>Domestic</option>
+      </select>
+      <small>Used by the dashboard's <b>Destination Type</b> filter.</small></label>
     <div style="display:flex;gap:8px;margin-top:16px">
       <button class="btn-add" data-pkgsave="1">Save</button>
       <button class="btn-lite" onclick="closePkgCfg()">Cancel</button>
@@ -2059,6 +2124,8 @@ function savePkgCfg() {
   const clearColor = document.getElementById("pkgBody").dataset.clear === "1";
   if (!newName) { alert("Enter a package name."); return; }
   if (!DB.packageColors || typeof DB.packageColors !== "object") DB.packageColors = {};
+  if (!DB.packageTypes || typeof DB.packageTypes !== "object") DB.packageTypes = {};
+  const destType = (document.getElementById("pkgDest") || {}).value === "domestic" ? "domestic" : "international";
   if (newName !== oldName) {
     const count = DB.entries.filter((e) => e.package === oldName).length;
     const exists = allPackages().includes(newName);
@@ -2068,11 +2135,13 @@ function savePkgCfg() {
     if (!confirm(msg)) return;
     DB.entries.forEach((e) => { if (e.package === oldName) e.package = newName; });
     delete DB.packageColors[oldName];
+    delete DB.packageTypes[oldName];
     if (sel.pkg === oldName) sel.pkg = newName;
     if (statsSel.has(oldName)) { statsSel.delete(oldName); statsSel.add(newName); } // keep the dashboard filter in sync
   }
   if (clearColor) delete DB.packageColors[newName];
   else DB.packageColors[newName] = color;
+  DB.packageTypes[newName] = destType;
   save(); closePkgCfg(); renderTree(); renderEditor();
 }
 function deletePackage() {
@@ -2084,6 +2153,7 @@ function deletePackage() {
   if (count > 0 && !confirm(`Last check — really delete "${pkg}" and its ${count} departure${count === 1 ? "" : "s"} for good?`)) return;
   DB.entries = DB.entries.filter((e) => e.package !== pkg);
   if (DB.packageColors) delete DB.packageColors[pkg];
+  if (DB.packageTypes) delete DB.packageTypes[pkg];
   if (sel.pkg === pkg) sel.pkg = null;
   if (sel.id && !DB.entries.some((e) => e.id === sel.id)) sel.id = null;
   statsSel.delete(pkg); // drop it from the dashboard filter if it was selected
@@ -2499,6 +2569,7 @@ function resetAll() {
   DB = seedDB();
   DB.entries = DB.entries.map(migrateEntry).filter(Boolean); DB = migrateUsers(DB); // match load(): opening sales -> bookings
   sel = { id: null, pkg: null, q: "" }; statsSel = new Set(); statsFilterOpen = false;
+  statFrom = ""; statTo = ""; statDest = "all"; statStatus = "all"; statsFilterQ = "";
   save(); renderTree(); renderEditor();
 }
 
@@ -2679,6 +2750,10 @@ document.getElementById("editor").addEventListener("change", (ev) => {
     if (ev.target.checked) statsSel.add(p); else statsSel.delete(p);
     renderStatsDD(); renderEditor(); return;
   }
+  if (ev.target.dataset.statfrom !== undefined) { statFrom = ev.target.value; renderEditor(); return; }   // TRAVEL DATE RANGE from
+  if (ev.target.dataset.statto !== undefined) { statTo = ev.target.value; renderEditor(); return; }       // TRAVEL DATE RANGE to
+  if (ev.target.dataset.statdest !== undefined) { statDest = ev.target.value; renderEditor(); return; }   // DESTINATION TYPE
+  if (ev.target.dataset.statstatus !== undefined) { statStatus = ev.target.value; renderEditor(); return; } // TRAVEL STATUS
   if (ev.target.dataset.bk !== undefined && ev.target.dataset.bkf) return updateBookingField(ev.target.dataset.bk, ev.target.dataset.bkf, ev.target.value, true); // blur -> commit
   if (ev.target.tagName !== "SELECT") return;
   if (ev.target.dataset.field !== "package") return;
@@ -2700,6 +2775,7 @@ document.getElementById("editor").addEventListener("click", (ev) => {
   if (ev.target.closest("[data-statfilter-all]")) { ev.stopPropagation(); statsSel.clear(); renderStatsDD(); renderEditor(); return; }
   if (ev.target.closest("[data-statfilter-selectall]")) { ev.stopPropagation(); statsSel = new Set(allPackages()); renderStatsDD(); renderEditor(); return; }
   if (ev.target.closest("[data-statfilter-clear]")) { ev.stopPropagation(); statsSel.clear(); renderStatsDD(); renderEditor(); return; }
+  if (ev.target.closest("[data-statclear]")) { statsSel.clear(); statFrom = ""; statTo = ""; statDest = "all"; statStatus = "all"; statsFilterQ = ""; statsFilterOpen = false; renderStatsDD(); renderEditor(); return; } // Clear ALL filters
   if (ev.target.closest(".pf-panel")) { ev.stopPropagation(); return; } // clicks inside the open dropdown (checkbox labels) stay open
   const open = ev.target.closest("[data-open]");            // dashboard table row -> open that departure
   if (open) return selectEntry(open.dataset.open);
@@ -2738,9 +2814,9 @@ document.getElementById("statsBtn").addEventListener("click", (ev) => {
   sel.id = null; editing = false;   // free the main panel for the dashboard
   renderStatsDD(); renderTree(); renderEditor();
 });
-/* Close the NAME OF PACKAGES dropdown when clicking outside it. */
+/* Close the NAME OF PACKAGES dropdown when clicking outside the filter bar. */
 document.addEventListener("click", (ev) => {
-  if (statsFilterOpen && !ev.target.closest(".pf-dd")) { statsFilterOpen = false; renderEditor(); }
+  if (statsFilterOpen && !ev.target.closest(".filterbar")) { statsFilterOpen = false; renderEditor(); }
 });
 
 /* ============================== boot ============================== */
