@@ -328,6 +328,12 @@
   .blank h2{color:var(--navy);margin:0 0 6px;font-size:17px}
   .note{background:#FBFCFE;border:1px dashed var(--line);border-radius:10px;padding:10px 12px;font-size:11.5px;color:var(--muted);margin-top:10px}
   .note b{color:var(--navy)}
+  /* primary top navigation */
+  .topnav{display:flex;gap:4px;align-items:center;flex-wrap:wrap;padding:7px 20px;background:#fff;border-bottom:1px solid var(--line);box-shadow:0 1px 3px rgba(20,40,80,.05)}
+  .navtab{background:transparent;border:1px solid transparent;border-radius:9px;padding:9px 16px;font:800 13px inherit;color:var(--navy);cursor:pointer;white-space:nowrap;font-family:inherit}
+  .navtab:hover{background:#F2F7FD}
+  .navtab.active{background:var(--navy);color:#fff}
+  @media(max-width:640px){ .navtab{padding:8px 11px;font-size:12px} .topnav{padding:6px 12px;gap:2px} }
 </style>
 </head>
 <body>
@@ -344,18 +350,20 @@
     <span class="saved" id="saveStatus"><i class="dot"></i> Saved</span>
     <span class="saved" id="cloudStatus"></span>
     <span class="who" id="whoChip"></span>
-    <button class="btn gold" onclick="openSettings()">⚙ Settings</button>
     <button class="btn" onclick="signOut()" title="Sign out">⎋ Sign out</button>
     <input type="file" id="csvInput" accept=".csv" style="display:none" />
   </div>
 </header>
 
+<nav class="topnav" id="topnav">
+  <button class="navtab" data-nav="dashboard">📊 Dashboard</button>
+  <button class="navtab" data-nav="international">🌐 International Packages</button>
+  <button class="navtab" data-nav="domestic">🏝 Domestic Packages</button>
+  <button class="navtab" data-nav="settings">⚙ Settings</button>
+</nav>
+
 <div class="app">
   <aside class="sidebar">
-    <div class="dd" id="statsDD">
-      <button class="dd-btn" id="statsBtn"></button>
-      <div class="dd-panel" id="statsPanel"></div>
-    </div>
     <div id="tree"></div>
     <button class="add-btn add-pkg admin-only" onclick="newPackage()">＋ New Package</button>
   </aside>
@@ -1477,7 +1485,7 @@ async function doLogin() {
 function openApp() {
   document.getElementById("authGate").classList.add("hidden");
   editing = false;
-  if (!sel.id) statsPkg = "__ALL__"; // open straight to the All-Packages dashboard (no tour-code pick)
+  if (!sel.id) { navView = "dashboard"; statsPkg = "__ALL__"; } // open straight to the Dashboard tab
   renderWho(); renderTree(); renderEditor();
 }
 function signOut() {
@@ -1846,22 +1854,29 @@ document.getElementById("settingsOvl").addEventListener("click", (ev) => {
 /* ============================== sidebar ============================== */
 /* ===== dashboard dropdown (sidebar) ===== */
 let statsPkg = null;          // null = dashboard hidden; "__ALL__" = dashboard is showing
+let navView = "dashboard";    // primary top nav: "dashboard" | "international" | "domestic"
 let statsSel = new Set();     // NAME OF PACKAGES filter: selected package names (empty = All)
 let statsFilterOpen = false;  // is the package-filter dropdown open?
 let statsFilterQ = "";        // search text inside that dropdown
 let statFrom = "";            // TRAVEL DATE RANGE — from (ISO yyyy-mm-dd, "" = no lower bound)
 let statTo = "";              // TRAVEL DATE RANGE — to   (ISO yyyy-mm-dd, "" = no upper bound)
-let statDest = "all";         // DESTINATION TYPE — "all" | "international" | "domestic"
+let statDest = "all";         // destination scope, driven by the top nav — "all" | "international" | "domestic"
 let statStatus = "all";       // TRAVEL STATUS — "all" | "pending" | "completed"
 
-// Sidebar button: one tap opens the All-Packages dashboard (no package-pick step).
+// Highlight the active top-nav tab (called wherever the view changes).
 function renderStatsDD() {
-  const btn = document.getElementById("statsBtn");
-  const on = statsPkg === "__ALL__";
-  btn.className = "dd-btn" + (on ? " open" : "");
-  btn.innerHTML = `📊 All Packages<span class="sub">${on ? "DASHBOARD — SHOWING" : "TAP TO OPEN DASHBOARD"}</span>`;
-  const panel = document.getElementById("statsPanel");
-  if (panel) { panel.className = "dd-panel"; panel.innerHTML = ""; }
+  document.querySelectorAll(".navtab[data-nav]").forEach((b) => b.classList.toggle("active", b.dataset.nav === navView));
+}
+/** Switch the primary top-nav view. Settings just opens the centered modal. */
+function navTo(view) {
+  if (view === "settings") { openSettings(); return; }
+  navView = view;
+  statsPkg = "__ALL__";
+  statsSel.clear(); statsFilterOpen = false; statsFilterQ = "";
+  statFrom = ""; statTo = ""; statStatus = "all";
+  statDest = view === "international" ? "international" : view === "domestic" ? "domestic" : "all";
+  sel.id = null; editing = false;
+  renderStatsDD(); renderTree(); renderEditor();
 }
 /** Live-filter the checkbox rows in the NAME OF PACKAGES dropdown (no re-render, keeps focus). */
 function filterStatPkgList(q) {
@@ -1886,7 +1901,7 @@ function renderFilters(all, selected, allNames) {
         <span class="nm">${esc(p)}</span><span class="pf-c">${n}</span></label>`;
   }).join("");
   const opt = (v, cur, label) => `<option value="${v}"${cur === v ? " selected" : ""}>${label}</option>`;
-  const anyFilter = statsSel.size || statFrom || statTo || statDest !== "all" || statStatus !== "all";
+  const anyFilter = statsSel.size || statFrom || statTo || statStatus !== "all"; // destination is set by the top nav, not a user filter
   return `<div class="filterbar">
       <div class="fb-cell">
         <div class="pf-label">NAME OF PACKAGES</div>
@@ -1907,10 +1922,6 @@ function renderFilters(all, selected, allNames) {
           <span>–</span>
           <input type="date" class="fb-date" data-statto value="${esc(statTo)}" title="To (travel date)">
         </div>
-      </div>
-      <div class="fb-cell">
-        <div class="pf-label">DESTINATION TYPE</div>
-        <select class="fb-sel" data-statdest>${opt("all", statDest, "All")}${opt("international", statDest, "International")}${opt("domestic", statDest, "Domestic")}</select>
       </div>
       <div class="fb-cell">
         <div class="pf-label">TRAVEL STATUS</div>
@@ -1934,7 +1945,8 @@ function renderPackageDashboard(host) {
   if (statDest !== "all") list = list.filter((e) => destTypeOf(e) === statDest);
   if (statStatus === "pending") list = list.filter((e) => !travelCompleted(e));
   else if (statStatus === "completed") list = list.filter((e) => travelCompleted(e));
-  const titleTxt = all ? "All Packages" : (selected.length === 1 ? selected[0] : selected.length + " packages selected");
+  const sectionName = navView === "international" ? "International Packages" : navView === "domestic" ? "Domestic Packages" : "All Packages";
+  const titleTxt = all ? sectionName : (selected.length === 1 ? selected[0] : selected.length + " packages selected");
   const voided = list.filter((e) => stOf(e) === "VOID");
   const live = list.filter((e) => stOf(e) !== "VOID"); // VOID drops out of the totals
   const t = { cost: 0, paid: 0, bal: 0, coll: 0, recv: 0, profit: 0, slots: 0, sold: 0, rem: 0 };
@@ -2050,13 +2062,15 @@ function orderedGroups(groups) {
 }
 function renderTree() {
   const q = sel.q.trim().toLowerCase();
-  const match = (e) => !q || (e.package || "").toLowerCase().includes(q) || (e.tourCode || "").toLowerCase().includes(q);
+  const inView = (e) => navView === "international" ? destTypeOf(e) === "international"
+                      : navView === "domestic" ? destTypeOf(e) === "domestic" : true;
+  const match = (e) => inView(e) && (!q || (e.package || "").toLowerCase().includes(q) || (e.tourCode || "").toLowerCase().includes(q));
   const visible = DB.entries.filter(match);
   renderStatsDD();
   const groups = orderedGroups(packagesOf(visible));
   const dragOn = isAdmin() && !q; // reordering only when not filtering by search
   const host = document.getElementById("tree");
-  if (!groups.length) { host.innerHTML = '<div class="empty">No matches.</div>'; return; }
+  if (!groups.length) { host.innerHTML = `<div class="empty">${navView === "domestic" ? "No domestic packages yet. Create one, or mark a package Domestic in its ⚙ settings." : navView === "international" ? "No international packages." : "No packages yet."}</div>`; return; }
   host.innerHTML = groups.map(([pkg, list]) => {
     const open = q ? true : sel.pkg === pkg;
     const codes = open ? `<div class="codes">${list.map((e) => {
@@ -2422,7 +2436,10 @@ function newPackage() {
   if (!isAdmin()) { alert(DENY); return; }
   const name = prompt("New package name:");
   if (!name || !name.trim()) return;
-  newEntry(name.trim());
+  const nm = name.trim();
+  if (!DB.packageTypes || typeof DB.packageTypes !== "object") DB.packageTypes = {};
+  DB.packageTypes[nm] = navView === "domestic" ? "domestic" : "international"; // matches the section you're in
+  newEntry(nm);
 }
 // NOTE: hard delete was removed on purpose. Tag a departure VOID instead — it stays
 // on file (audit trail intact) and drops out of the dashboard totals.
@@ -2767,7 +2784,7 @@ document.getElementById("editor").addEventListener("click", (ev) => {
   if (ev.target.closest("[data-statfilter-all]")) { ev.stopPropagation(); statsSel.clear(); renderStatsDD(); renderEditor(); return; }
   if (ev.target.closest("[data-statfilter-selectall]")) { ev.stopPropagation(); statsSel = new Set(allPackages()); renderStatsDD(); renderEditor(); return; }
   if (ev.target.closest("[data-statfilter-clear]")) { ev.stopPropagation(); statsSel.clear(); renderStatsDD(); renderEditor(); return; }
-  if (ev.target.closest("[data-statclear]")) { statsSel.clear(); statFrom = ""; statTo = ""; statDest = "all"; statStatus = "all"; statsFilterQ = ""; statsFilterOpen = false; renderStatsDD(); renderEditor(); return; } // Clear ALL filters
+  if (ev.target.closest("[data-statclear]")) { statsSel.clear(); statFrom = ""; statTo = ""; statStatus = "all"; statsFilterQ = ""; statsFilterOpen = false; renderStatsDD(); renderEditor(); return; } // Clear the user filters (destination stays on the current section)
   if (ev.target.closest(".pf-panel")) { ev.stopPropagation(); return; } // clicks inside the open dropdown (checkbox labels) stay open
   const open = ev.target.closest("[data-open]");            // dashboard table row -> open that departure
   if (open) return selectEntry(open.dataset.open);
@@ -2799,12 +2816,10 @@ document.getElementById("editor").addEventListener("click", (ev) => {
   const dp = ev.target.closest("[data-delpay]");
   if (dp) return deletePayment(dp.dataset.delpay);
 });
-/* Sidebar dashboard button: one tap opens the All-Packages dashboard (no pick step). */
-document.getElementById("statsBtn").addEventListener("click", (ev) => {
-  ev.stopPropagation();
-  statsPkg = "__ALL__";
-  sel.id = null; editing = false;   // free the main panel for the dashboard
-  renderStatsDD(); renderTree(); renderEditor();
+/* Primary top navigation: Dashboard / International / Domestic / Settings. */
+document.getElementById("topnav").addEventListener("click", (ev) => {
+  const t = ev.target.closest("[data-nav]"); if (!t) return;
+  navTo(t.dataset.nav);
 });
 /* Close the NAME OF PACKAGES dropdown when clicking outside the filter bar. */
 document.addEventListener("click", (ev) => {
