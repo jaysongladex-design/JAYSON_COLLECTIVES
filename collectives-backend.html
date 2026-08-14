@@ -58,10 +58,11 @@
   /* NAME OF PACKAGES filter (inside the dashboard) */
   .pkgfilter{margin:0 0 14px}
   .pf-label{font-size:11px;font-weight:800;letter-spacing:.06em;color:var(--muted);margin-bottom:5px}
-  .pf-dd{position:relative;max-width:380px}
+  .pf-dd{position:relative;width:min(500px,92vw)}
   .pf-btn{width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:9px;padding:9px 12px;font:600 13px inherit;color:var(--ink);cursor:pointer}
   .pf-btn:hover{border-color:var(--navy)}
-  .pf-chev{color:var(--muted)}
+  .pf-btn>span:first-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+  .pf-chev{color:var(--muted);flex:0 0 auto}
   .pf-panel{position:absolute;z-index:40;top:calc(100% + 5px);left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(20,40,80,.16);padding:9px}
   .pf-search{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:7px;padding:7px 9px;font:inherit;font-size:12.5px;margin-bottom:7px}
   .pf-all{width:100%;text-align:left;background:#F2F7FD;border:none;border-radius:7px;padding:8px 9px;cursor:pointer;font:700 12.5px inherit;color:var(--navy);margin-bottom:5px}
