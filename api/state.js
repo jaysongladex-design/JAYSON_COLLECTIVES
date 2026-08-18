@@ -48,20 +48,66 @@ export default async function handler(req, res) {
     }
     if (req.method === "POST") {
       if (!body || typeof body.data === "undefined") return res.status(400).json({ ok: false, error: "No data sent." });
-      const r = await fetch(`${base}?on_conflict=id`, {
-        method: "POST",
-        headers: { ...sb, Prefer: "resolution=merge-duplicates,return=minimal" },
-        body: JSON.stringify({ id: ROW_ID, data: body.data, updated_at: new Date().toISOString() }),
-      });
-      if (!r.ok) return res.status(502).json({ ok: false, error: "Save failed (" + r.status + ")." });
+      const incoming = body.data;
+      const selUrl = `${base}?id=eq.${ROW_ID}&select=data,updated_at`;
+      let merged = null, savedOk = false, now = new Date().toISOString();
+      // Merge the incoming document into whatever is stored (never overwrite), with a
+      // compare-and-set retry so two simultaneous saves can't lose each other's changes.
+      // The final attempt writes unconditionally, so a save can never hard-fail (it still merges).
+      const ATTEMPTS = 7;
+      for (let attempt = 0; attempt < ATTEMPTS && !savedOk; attempt++) {
+        const gr = await fetch(selUrl, { headers: sb });
+        if (!gr.ok) return res.status(502).json({ ok: false, error: "Load failed (" + gr.status + ")." });
+        const rows = await gr.json();
+        const cur = rows[0];
+        merged = mergeState(cur ? cur.data : null, incoming);
+        now = new Date().toISOString();
+        const lastTry = attempt === ATTEMPTS - 1;
+        if (!cur) {
+          // no row yet -> insert. A concurrent insert fails here -> retry (row will then exist).
+          const ir = await fetch(base + (lastTry ? "?on_conflict=id" : ""), { method: "POST", headers: { ...sb, Prefer: lastTry ? "resolution=merge-duplicates,return=minimal" : "return=minimal" }, body: JSON.stringify({ id: ROW_ID, data: merged, updated_at: now }) });
+          savedOk = ir.ok;
+        } else if (lastTry) {
+          // fallback: unconditional merge-write by id (still merged; just not CAS-protected)
+          const wr = await fetch(`${base}?id=eq.${ROW_ID}`, { method: "PATCH", headers: { ...sb, Prefer: "return=minimal" }, body: JSON.stringify({ data: merged, updated_at: now }) });
+          savedOk = wr.ok;
+        } else {
+          // compare-and-set on updated_at: only write if nobody else wrote since we read
+          const pr = await fetch(`${base}?id=eq.${ROW_ID}&updated_at=eq.${encodeURIComponent(cur.updated_at)}`, { method: "PATCH", headers: { ...sb, Prefer: "return=representation" }, body: JSON.stringify({ data: merged, updated_at: now }) });
+          if (pr.ok) { const pj = await pr.json().catch(() => []); savedOk = Array.isArray(pj) && pj.length >= 1; }
+        }
+      }
+      if (!savedOk) return res.status(502).json({ ok: false, error: "Save failed." });
       // Best-effort: also mirror the departures into a readable collectives_public table.
-      try { await mirrorPublic(URL_, sb, body.data); } catch (e) {}
-      return res.status(200).json({ ok: true });
+      try { await mirrorPublic(URL_, sb, merged); } catch (e) {}
+      return res.status(200).json({ ok: true, data: merged, updated_at: now });
     }
     return res.status(405).json({ ok: false, error: "Use GET or POST." });
   } catch (e) {
     return res.status(502).json({ ok: false, error: "Couldn't reach the database." });
   }
+}
+
+// Conflict-free merge of two app documents — IDENTICAL logic to mergeState() in the client.
+// Union entries by id (newest updatedAt wins), honour deletion tombstones, newer doc wins for scalars.
+function mergeState(base, incoming) {
+  if (!base || !Array.isArray(base.entries)) return incoming || base || null;
+  if (!incoming || !Array.isArray(incoming.entries)) return base;
+  const del = {};
+  [base, incoming].forEach((d) => { const m = d && d.deletedIds; if (m && typeof m === "object") for (const k in m) { const t = m[k] || ""; if (!del[k] || t > del[k]) del[k] = t; } });
+  const em = new Map();
+  const put = (e) => { if (!e || !e.id) return; const ex = em.get(e.id); if (!ex || (e.updatedAt || "") >= (ex.updatedAt || "")) em.set(e.id, e); };
+  base.entries.forEach(put); incoming.entries.forEach(put);
+  const entries = [...em.values()].filter((e) => !(del[e.id] && del[e.id] >= (e.updatedAt || "")));
+  const um = new Map();
+  (base.users || []).forEach((u) => u && u.id && um.set(u.id, u));
+  (incoming.users || []).forEach((u) => u && u.id && um.set(u.id, u));
+  const bt = base.updatedAt || "", it = incoming.updatedAt || "";
+  const newer = it >= bt ? incoming : base, older = it >= bt ? base : incoming;
+  const out = Object.assign({}, older, newer);
+  out.version = 1; out.updatedAt = it >= bt ? it : bt;
+  out.users = [...um.values()]; out.entries = entries; out.deletedIds = del;
+  return out;
 }
 
 // Rebuild the readable collectives_public table (one row per departure) from the app data.

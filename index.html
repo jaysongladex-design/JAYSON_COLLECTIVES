@@ -1179,6 +1179,7 @@ function seedDB() {
     currentUserId: ADMIN_ID,
     packageColors: {},
     packageTypes: {},    // { [packageName]: "international" | "domestic" } — default international
+    deletedIds: {},      // tombstones { [entryId]: ISO time } so deletes survive the cloud merge
     budget: { seed: 0 }, // revolving working-capital pool (Settings → Revolving budget)
     entries: SEED.map((r) => ({
       id: uid(),
@@ -1261,6 +1262,7 @@ function migrateUsers(d) {
   if (!d.users.some((u) => u.id === d.currentUserId)) d.currentUserId = d.users[0].id;
   if (!d.packageColors || typeof d.packageColors !== "object") d.packageColors = {};
   if (!d.packageTypes || typeof d.packageTypes !== "object") d.packageTypes = {};
+  if (!d.deletedIds || typeof d.deletedIds !== "object") d.deletedIds = {};
   // revolving-budget pool: keep an extensible object (seed now; alert threshold etc. later)
   if (!d.budget || typeof d.budget !== "object") d.budget = { seed: 0 };
   d.budget.seed = num(String(d.budget.seed).replace(/,/g, ""));
@@ -1281,12 +1283,57 @@ function load() {
   return migrateUsers(s);
 }
 let DB = load();
+/* ===== per-entry change tracking (for the conflict-free cloud merge) ===== */
+let _entrySig = {};
+function entrySig(e) { const c = {}; for (const k in e) if (k !== "updatedAt") c[k] = e[k]; return JSON.stringify(c); }
+function refreshSig() { _entrySig = {}; for (const e of DB.entries) _entrySig[e.id] = entrySig(e); }
+/** Give each entry whose CONTENT changed a fresh updatedAt so the cloud merge can pick the newest per departure. */
+function bumpChangedEntries() {
+  const now = new Date().toISOString();
+  for (const e of DB.entries) { if (_entrySig[e.id] !== entrySig(e)) e.updatedAt = now; _entrySig[e.id] = entrySig(e); }
+}
+refreshSig(); // baseline the loaded data so the first edit only bumps what actually changed
+/* ===== conflict-free cloud merge — IDENTICAL logic in api/state.js ===== */
+function mergeState(base, incoming) {
+  if (!base || !Array.isArray(base.entries)) return incoming || base || null;
+  if (!incoming || !Array.isArray(incoming.entries)) return base;
+  const del = {};
+  [base, incoming].forEach((d) => { const m = d && d.deletedIds; if (m && typeof m === "object") for (const k in m) { const t = m[k] || ""; if (!del[k] || t > del[k]) del[k] = t; } });
+  const em = new Map();
+  const put = (e) => { if (!e || !e.id) return; const ex = em.get(e.id); if (!ex || (e.updatedAt || "") >= (ex.updatedAt || "")) em.set(e.id, e); };
+  base.entries.forEach(put); incoming.entries.forEach(put);
+  const entries = [...em.values()].filter((e) => !(del[e.id] && del[e.id] >= (e.updatedAt || "")));
+  const um = new Map();
+  (base.users || []).forEach((u) => u && u.id && um.set(u.id, u));
+  (incoming.users || []).forEach((u) => u && u.id && um.set(u.id, u));
+  const bt = base.updatedAt || "", it = incoming.updatedAt || "";
+  const newer = it >= bt ? incoming : base, older = it >= bt ? base : incoming;
+  const out = Object.assign({}, older, newer);
+  out.version = 1; out.updatedAt = it >= bt ? it : bt;
+  out.users = [...um.values()]; out.entries = entries; out.deletedIds = del;
+  return out;
+}
+/** Replace local DB with a merged/server document and re-baseline signatures. */
+function adoptMerged(data) {
+  if (!data || !Array.isArray(data.entries)) return false;
+  data.entries = data.entries.map(migrateEntry).filter(Boolean);
+  DB = migrateUsers(data);
+  refreshSig();
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); } catch (e) {}
+  return true;
+}
+function editorInputFocused() {
+  const a = document.activeElement; if (!a) return false;
+  if (!/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) return false;
+  return !!a.closest("#editor, .modal");
+}
 let sel = { id: null, pkg: null, q: "" };
 let editing = false; // Details fields start frozen; the Edit button unlocks them
 
 let saveTimer = null;
 function save() {
   DB.updatedAt = new Date().toISOString();
+  bumpChangedEntries();   // stamp each changed departure so the cloud merge keeps the newest per departure
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(DB));
     const el = document.getElementById("saveStatus");
@@ -1321,7 +1368,11 @@ async function serverSave() {
   const secret = getStateSecret(); if (!secret) return;
   try {
     const r = await fetch(STATE_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ secret, data: DB }) });
-    setCloud(r.ok ? "saved" : "error");
+    if (!r.ok) { setCloud("error"); return; }
+    const j = await r.json().catch(() => null);
+    // converge to the merged truth so colleagues' changes appear — but never yank the ground out mid-typing
+    if (j && j.data && Array.isArray(j.data.entries) && !editorInputFocused()) { adoptMerged(j.data); renderTree(); renderEditor(); }
+    setCloud("saved");
   } catch (e) { setCloud("error"); }
 }
 function scheduleCloudSave() {
@@ -2165,6 +2216,9 @@ function deletePackage() {
   const code = prompt(`Enter the passcode to permanently delete "${pkg}"${count ? ` and its ${count} departure${count === 1 ? "" : "s"}` : ""}:`);
   if (code === null) return;                                                        // cancelled
   if (code.trim() !== "GLADEX123") { alert("Wrong passcode — the package was NOT deleted."); return; }
+  if (!DB.deletedIds || typeof DB.deletedIds !== "object") DB.deletedIds = {};
+  const delTime = new Date().toISOString();
+  inPkg.forEach((e) => { DB.deletedIds[e.id] = delTime; }); // tombstones so the delete survives the cloud merge
   DB.entries = DB.entries.filter((e) => e.package !== pkg);
   if (DB.packageColors) delete DB.packageColors[pkg];
   if (DB.packageTypes) delete DB.packageTypes[pkg];
@@ -2835,25 +2889,17 @@ function startAuth() {
   openApp();
 }
 /** Replace local data with the server's (server is the source of truth). Returns false if server was empty. */
-function adoptRemote(remote) {
-  if (remote && Array.isArray(remote.entries)) {
-    remote.entries = remote.entries.map(migrateEntry).filter(Boolean);
-    DB = migrateUsers(remote);
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); } catch (e) {}
-    return true;
-  }
-  return false;
-}
-/** Decide server vs local by which is newer. Returns "push" if local should be sent up. */
+/** Combine the server document with local edits (never lose either side). Returns "push" if the result should go up. */
 function applyServer(payload) {
-  const data = payload && payload.data;
-  if (data && Array.isArray(data.entries)) {
-    const localTime = (DB && DB.updatedAt) || "";
-    const serverTime = (payload.updated_at) || "";
-    if (serverTime >= localTime) { adoptRemote(data); return "adopted"; } // server newer/equal -> use it
-    // local is newer (unsynced edits) -> keep local, push it up
+  const server = payload && payload.data;
+  if (server && Array.isArray(server.entries)) {
+    const serverHas = new Set(server.entries.map((e) => e.id));
+    const shares = (DB.entries || []).some((e) => serverHas.has(e.id));
+    if (!shares) { adoptMerged(server); return "adopted"; } // unrelated local (fresh seed) -> take the server as-is
+    adoptMerged(mergeState(DB, server));                    // merge local edits with the server
+    return "push";                                          // propagate the merged result up
   }
-  return "push"; // server empty, or local is newer
+  return "push"; // server empty -> seed from this device
 }
 function renderConnect(msg) {
   const gate = document.getElementById("authGate");
