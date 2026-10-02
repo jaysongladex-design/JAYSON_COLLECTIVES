@@ -2024,14 +2024,18 @@ function renderPackageDashboard(host) {
   const voided = list.filter((e) => stOf(e) === "VOID");
   const live = list.filter((e) => stOf(e) !== "VOID"); // VOID drops out of the totals
   const t = { cost: 0, paid: 0, bal: 0, coll: 0, recv: 0, profit: 0, slots: 0, sold: 0, rem: 0 };
+  let toDays = 0, toSold = 0, soldOutCount = 0; // turnover: only departures with a holding + sold-out date
   live.forEach((e) => {
     const d = derive(e);
     t.cost += num(e.totalCost); t.paid += d.paid; t.bal += d.balance;
     t.coll += d.collected; t.recv += d.receivable; t.profit += d.profit;
     t.slots += d.totalSlots; t.sold += d.slotSold; t.rem += Math.max(0, d.remaining);
+    if (d.daysToSoldOut != null) { toDays += num(d.daysToSoldOut); toSold += d.slotSold; soldOutCount++; }
   });
   const roi = t.cost ? (t.profit / t.cost) * 100 : 0;
   const sell = t.slots ? (t.sold / t.slots) * 100 : 0;
+  const avgDays = soldOutCount ? toDays / soldOutCount : 0;        // average days from holding to sold out
+  const turnover = toDays > 0 ? toSold / toDays : 0;               // slots sold per day over that window
   const f = revolvingFund(list); // working-capital pool for the current view (respects the filters)
   const pkgs = new Set(list.map((e) => e.package).filter(Boolean)).size;
   const cnt = (s) => list.filter((e) => stOf(e) === s).length;
@@ -2059,6 +2063,17 @@ function renderPackageDashboard(host) {
         ${tile("Sell-through", sell.toFixed(1) + "%", sell >= 75 ? "green" : "gold", "sellThrough")}
       </div>
       <div class="pbar"><i style="width:${Math.max(0, Math.min(100, sell)).toFixed(1)}%"></i></div>
+    </section>
+
+    <section class="card">
+      <h3>Turnover</h3>
+      <p class="sub">How fast slots sell — from <b>holding date</b> to <b>sold-out date</b>. Based on ${qty(soldOutCount)} of ${qty(live.length)} departure${live.length === 1 ? "" : "s"} that have both dates${soldOutCount ? "" : " — add a sold-out date to a departure to measure it"}.</p>
+      <div class="tiles">
+        ${tile("Avg days to sold out", soldOutCount ? avgDays.toFixed(1) + " days" : "—", "", soldOutCount ? "avgDays" : "")}
+        ${tile("Turnover rate", soldOutCount ? turnover.toFixed(2) + " /day" : "—", soldOutCount ? "green" : "", soldOutCount ? "turnover" : "")}
+        ${tile("Per week", soldOutCount ? (turnover * 7).toFixed(1) + " /wk" : "—")}
+        ${tile("Measured sold-outs", qty(soldOutCount), "", soldOutCount ? "avgDays" : "")}
+      </div>
     </section>
 
     <section class="card">
@@ -2138,19 +2153,26 @@ const DASH_METRICS = {
   receivable:  { title: "Receivable from Pax", cols: [["Receivable", (e, d) => d.receivable, "money"]] },
   profit:      { title: "Profit", cols: [["Profit", (e, d) => d.profit, "money"]] },
   roi:         { title: "ROI", cols: [["Profit", (e, d) => d.profit, "money"], ["Cost", (e) => num(e.totalCost), "money"], ["ROI", (e, d) => (num(e.totalCost) ? d.profit / num(e.totalCost) * 100 : 0), "pct"]] },
+  avgDays:     { title: "Days to sold out", filter: (e, d) => d.daysToSoldOut != null, asc: true, avgTotal: true, cols: [["Days to sold out", (e, d) => d.daysToSoldOut, "qty"], ["Slots Sold", (e, d) => d.slotSold, "qty"]] },
+  turnover:    { title: "Turnover rate", filter: (e, d) => d.daysToSoldOut != null, sortCol: 2, cols: [["Slots Sold", (e, d) => d.slotSold, "qty"], ["Days to sold out", (e, d) => d.daysToSoldOut, "qty"], ["Slots/day", (e, d) => d.perDay, "rate"]] },
 };
-const fmtCell = (v, kind) => kind === "money" ? money(v) : kind === "pct" ? num(v).toFixed(1) + "%" : qty(v);
+const fmtCell = (v, kind) => kind === "money" ? money(v) : kind === "pct" ? num(v).toFixed(1) + "%" : kind === "rate" ? num(v).toFixed(2) : qty(v);
 let detailMetric = null;
 function openDetail(metric) { if (!DASH_METRICS[metric]) return; detailMetric = metric; renderDetail(); document.getElementById("detailOvl").classList.add("open"); }
 function closeDetail() { document.getElementById("detailOvl").classList.remove("open"); detailMetric = null; }
 function renderDetail() {
   const m = DASH_METRICS[detailMetric]; if (!m) return;
-  const rows = dashFilteredList().filter((e) => stOf(e) !== "VOID").map((e) => ({ e, d: derive(e) }));
-  if (m.cols.length) rows.sort((a, b) => num(m.cols[0][1](b.e, b.d)) - num(m.cols[0][1](a.e, a.d))); // biggest contributors first
+  let rows = dashFilteredList().filter((e) => stOf(e) !== "VOID").map((e) => ({ e, d: derive(e) }));
+  if (m.filter) rows = rows.filter((r) => m.filter(r.e, r.d)); // e.g. turnover: only departures that have sold out
+  const sc = m.sortCol || 0;
+  if (m.cols.length) rows.sort((a, b) => { const x = num(m.cols[sc][1](a.e, a.d)), y = num(m.cols[sc][1](b.e, b.d)); return m.asc ? x - y : y - x; });
   const sums = m.cols.map((c) => rows.reduce((s, r) => s + num(c[1](r.e, r.d)), 0));
-  const totalCells = m.cols.map((c, i) => c[2] === "pct"
-    ? `<td class="num">${sums[1] ? (sums[0] / sums[1] * 100).toFixed(1) + "%" : "—"}</td>` // aggregate ratio, not a sum
-    : `<td class="num">${fmtCell(sums[i], c[2])}</td>`).join("");
+  const totalCells = m.cols.map((c, i) => {
+    if (c[2] === "pct") return `<td class="num">${sums[1] ? (sums[0] / sums[1] * 100).toFixed(1) + "%" : "—"}</td>`; // aggregate ratio
+    if (c[2] === "rate") return `<td class="num">${sums[1] ? (sums[0] / sums[1]).toFixed(2) : "—"}</td>`;             // aggregate slots/day
+    if (m.avgTotal && i === 0) return `<td class="num">${rows.length ? (sums[0] / rows.length).toFixed(1) : "—"}</td>`; // average, not a sum
+    return `<td class="num">${fmtCell(sums[i], c[2])}</td>`;
+  }).join("");
   document.getElementById("detailTitle").textContent = m.title + " — breakdown";
   document.getElementById("detailSub").textContent = `${rows.length} departure${rows.length === 1 ? "" : "s"} in the current view · tap a row to open it`;
   document.getElementById("detailBody").innerHTML = `
