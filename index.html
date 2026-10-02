@@ -2215,7 +2215,7 @@ function deletePackage() {
   if (!confirm(`Delete the package "${pkg}"?\n\nThis permanently removes ${count} tour code${count === 1 ? "" : "s"} and all their payments and slots-sold history.\n\nThis cannot be undone.`)) return;
   const code = prompt(`Enter the passcode to permanently delete "${pkg}"${count ? ` and its ${count} departure${count === 1 ? "" : "s"}` : ""}:`);
   if (code === null) return;                                                        // cancelled
-  if (code.trim() !== "GLADEX123") { alert("Wrong passcode — the package was NOT deleted."); return; }
+  if (code.trim() !== "GLADEX2K26") { alert("Wrong passcode — the package was NOT deleted."); return; }
   if (!DB.deletedIds || typeof DB.deletedIds !== "object") DB.deletedIds = {};
   const delTime = new Date().toISOString();
   inPkg.forEach((e) => { DB.deletedIds[e.id] = delTime; }); // tombstones so the delete survives the cloud merge

@@ -33,7 +33,7 @@ export default async function handler(req, res) {
   // Accepts the Vercel STATE_SECRET (if set) OR this built-in passcode.
   // NOTE: this passcode lives in a PUBLIC repo — anyone who reads it + has the
   // app URL can open the app. It's a low bar by design (owner's choice).
-  const PASSCODE = "GLADEX123";
+  const PASSCODE = "GLADEX2K26";
   if (!secret || (secret !== PASSCODE && secret !== SECRET)) return res.status(401).json({ ok: false, error: "Wrong passcode." });
 
   const base = URL_.replace(/\/+$/, "") + "/rest/v1/app_state";
