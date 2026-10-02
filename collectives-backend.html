@@ -294,6 +294,11 @@
   .tile.gold .t-v{color:#8a6d0b}
   .tile.green .t-v{color:var(--green)}
   .tile.red .t-v{color:var(--red)}
+  .tile.tile-click{cursor:pointer;transition:border-color .12s,box-shadow .12s,transform .06s}
+  .tile.tile-click:hover{border-color:var(--navy);box-shadow:0 3px 10px rgba(20,40,80,.12)}
+  .tile.tile-click:active{transform:translateY(1px)}
+  .tile.tile-click .t-l::after{content:" ⤢";font-size:9px;opacity:.5}
+  .detail-modal{max-width:880px}
 
   /* Payments */
   table{width:100%;border-collapse:collapse;font-size:12.5px}
@@ -385,6 +390,16 @@
       <button class="x" onclick="closePkgCfg()" title="Close">✕</button>
     </div>
     <div class="modal-b" id="pkgBody"></div>
+  </div>
+</div>
+
+<div class="ovl" id="detailOvl">
+  <div class="modal detail-modal" role="dialog" aria-label="Breakdown">
+    <div class="modal-h">
+      <div><h2 id="detailTitle">Breakdown</h2><p id="detailSub"></p></div>
+      <button class="x" onclick="closeDetail()" title="Close">✕</button>
+    </div>
+    <div class="modal-b" id="detailBody"></div>
   </div>
 </div>
 
@@ -1899,6 +1914,10 @@ document.getElementById("settingsBody").addEventListener("change", (ev) => {
 document.getElementById("settingsOvl").addEventListener("click", (ev) => {
   if (ev.target.id === "settingsOvl") closeSettings(); // click the backdrop to close
 });
+document.getElementById("detailOvl").addEventListener("click", (ev) => {
+  if (ev.target.id === "detailOvl") return closeDetail();                 // backdrop closes
+  const r = ev.target.closest("[data-detopen]"); if (r) { closeDetail(); selectEntry(r.dataset.detopen); } // row -> open departure
+});
 
 /* ============================== sidebar ============================== */
 /* ===== dashboard dropdown (sidebar) ===== */
@@ -1981,19 +2000,25 @@ function renderFilters(all, selected, allNames) {
       </div>
     </div>`;
 }
+/** The departures the dashboard currently shows (package selection + travel date + destination + status). */
+function dashFilteredList() {
+  const allNames = allPackages();
+  const all = statsSel.size === 0 || statsSel.size >= allNames.length;
+  let list = all ? DB.entries.slice() : DB.entries.filter((e) => statsSel.has(e.package));
+  const fromD = statFrom ? parseD(statFrom) : null, toD = statTo ? parseD(statTo) : null;
+  if (fromD || toD) list = list.filter((e) => { const s = travelStartOf(e), en = travelEndOf(e) || travelStartOf(e); if (!s && !en) return false; const a = s || en, b = en || s; return !((toD && a > toD) || (fromD && b < fromD)); });
+  if (statDest !== "all") list = list.filter((e) => destTypeOf(e) === statDest);
+  if (statStatus === "pending") list = list.filter((e) => !travelCompleted(e));
+  else if (statStatus === "completed") list = list.filter((e) => travelCompleted(e));
+  return list;
+}
 /** Full-width dashboard for the selected package(s) — renders in the MAIN panel. */
 function renderPackageDashboard(host) {
   const allNames = allPackages();
   const selected = statsSel.size ? allNames.filter((p) => statsSel.has(p)) : allNames.slice();
   const all = statsSel.size === 0 || statsSel.size >= allNames.length; // whole-business view
   const multi = selected.length !== 1;   // show the Package column unless exactly one package is chosen
-  let list = all ? DB.entries.slice() : DB.entries.filter((e) => statsSel.has(e.package));
-  // TRAVEL DATE RANGE (overlap) + DESTINATION TYPE + TRAVEL STATUS — all combine (AND)
-  const fromD = statFrom ? parseD(statFrom) : null, toD = statTo ? parseD(statTo) : null;
-  if (fromD || toD) list = list.filter((e) => { const s = travelStartOf(e), en = travelEndOf(e) || travelStartOf(e); if (!s && !en) return false; const a = s || en, b = en || s; return !((toD && a > toD) || (fromD && b < fromD)); });
-  if (statDest !== "all") list = list.filter((e) => destTypeOf(e) === statDest);
-  if (statStatus === "pending") list = list.filter((e) => !travelCompleted(e));
-  else if (statStatus === "completed") list = list.filter((e) => travelCompleted(e));
+  const list = dashFilteredList();        // package selection + travel date + destination + status (all AND)
   const sectionName = navView === "international" ? "International Packages" : navView === "domestic" ? "Domestic Packages" : "All Packages";
   const titleTxt = all ? sectionName : (selected.length === 1 ? selected[0] : selected.length + " packages selected");
   const voided = list.filter((e) => stOf(e) === "VOID");
@@ -2010,7 +2035,7 @@ function renderPackageDashboard(host) {
   const f = revolvingFund(list); // working-capital pool for the current view (respects the filters)
   const pkgs = new Set(list.map((e) => e.package).filter(Boolean)).size;
   const cnt = (s) => list.filter((e) => stOf(e) === s).length;
-  const tile = (l, v, c) => `<div class="tile ${c || ""}"><div class="t-l">${l}</div><div class="t-v">${v}</div></div>`;
+  const tile = (l, v, c, metric) => `<div class="tile ${c || ""}${metric ? " tile-click" : ""}"${metric ? ` data-metric="${metric}" title="Click for the breakdown"` : ""}><div class="t-l">${l}</div><div class="t-v">${v}</div></div>`;
   host.innerHTML = `
     <div class="ed-head">
       <div><h2>${esc(titleTxt)}</h2>
@@ -2027,11 +2052,11 @@ function renderPackageDashboard(host) {
       <h3>Slots</h3>
       <p class="sub">Inventory across ${all ? "every package" : (selected.length === 1 ? "this package" : "the selected packages")}.${voided.length ? ` <b>${qty(voided.length)} VOID departure${voided.length === 1 ? "" : "s"} excluded from all totals below.</b>` : ""}</p>
       <div class="tiles">
-        ${tile("Departures", qty(live.length))}
-        ${tile("Total Slots", qty(t.slots))}
-        ${tile("Slots Sold", qty(t.sold), "green")}
-        ${tile("Remaining", qty(t.rem), t.rem > 0 ? "gold" : "green")}
-        ${tile("Sell-through", sell.toFixed(1) + "%", sell >= 75 ? "green" : "gold")}
+        ${tile("Departures", qty(live.length), "", "departures")}
+        ${tile("Total Slots", qty(t.slots), "", "totalSlots")}
+        ${tile("Slots Sold", qty(t.sold), "green", "slotsSold")}
+        ${tile("Remaining", qty(t.rem), t.rem > 0 ? "gold" : "green", "remaining")}
+        ${tile("Sell-through", sell.toFixed(1) + "%", sell >= 75 ? "green" : "gold", "sellThrough")}
       </div>
       <div class="pbar"><i style="width:${Math.max(0, Math.min(100, sell)).toFixed(1)}%"></i></div>
     </section>
@@ -2040,13 +2065,13 @@ function renderPackageDashboard(host) {
       <h3>Money</h3>
       <p class="sub">Supplier position and what you've collected from pax.</p>
       <div class="tiles">
-        ${tile("Total Cost", money(t.cost))}
-        ${tile("Paid to Supplier", money(t.paid))}
-        ${tile("Balance Payable", money(t.bal), t.bal >= CENT ? "red" : "green")}
-        ${tile("Collected from Pax", money(t.coll), "gold")}
-        ${tile("Receivable from Pax", money(t.recv), t.recv > CENT ? "red" : "green")}
-        ${tile("Profit", money(t.profit), t.profit >= 0 ? "green" : "red")}
-        ${tile("ROI", roi.toFixed(2) + "%", roi >= 0 ? "green" : "red")}
+        ${tile("Total Cost", money(t.cost), "", "totalCost")}
+        ${tile("Paid to Supplier", money(t.paid), "", "paid")}
+        ${tile("Balance Payable", money(t.bal), t.bal >= CENT ? "red" : "green", "balance")}
+        ${tile("Collected from Pax", money(t.coll), "gold", "collected")}
+        ${tile("Receivable from Pax", money(t.recv), t.recv > CENT ? "red" : "green", "receivable")}
+        ${tile("Profit", money(t.profit), t.profit >= 0 ? "green" : "red", "profit")}
+        ${tile("ROI", roi.toFixed(2) + "%", roi >= 0 ? "green" : "red", "roi")}
       </div>
     </section>
 ${all ? `
@@ -2097,6 +2122,51 @@ ${all ? `
         <td class="num">${money(t.coll)}</td><td class="num">${money(t.profit)}</td><td class="num">${roi.toFixed(2)}%</td>
       </tr></tfoot></table></div>
     </section>`;
+}
+
+/* ===== dashboard tile breakdowns (click a tile -> per-departure detail) ===== */
+const DASH_METRICS = {
+  departures:  { title: "Departures", cols: [] },
+  totalSlots:  { title: "Total Slots", cols: [["Total Slots", (e, d) => d.totalSlots, "qty"]] },
+  slotsSold:   { title: "Slots Sold", cols: [["Slots Sold", (e, d) => d.slotSold, "qty"]] },
+  remaining:   { title: "Remaining Slots", cols: [["Remaining", (e, d) => Math.max(0, d.remaining), "qty"]] },
+  sellThrough: { title: "Sell-through", cols: [["Sold", (e, d) => d.slotSold, "qty"], ["Total", (e, d) => d.totalSlots, "qty"], ["Sell-through", (e, d) => (d.totalSlots ? d.slotSold / d.totalSlots * 100 : 0), "pct"]] },
+  totalCost:   { title: "Total Cost", cols: [["Total Cost", (e) => num(e.totalCost), "money"]] },
+  paid:        { title: "Paid to Supplier", cols: [["Paid", (e, d) => d.paid, "money"]] },
+  balance:     { title: "Balance Payable to Supplier", cols: [["Balance", (e, d) => d.balance, "money"]] },
+  collected:   { title: "Collected from Pax", cols: [["Collected", (e, d) => d.collected, "money"]] },
+  receivable:  { title: "Receivable from Pax", cols: [["Receivable", (e, d) => d.receivable, "money"]] },
+  profit:      { title: "Profit", cols: [["Profit", (e, d) => d.profit, "money"]] },
+  roi:         { title: "ROI", cols: [["Profit", (e, d) => d.profit, "money"], ["Cost", (e) => num(e.totalCost), "money"], ["ROI", (e, d) => (num(e.totalCost) ? d.profit / num(e.totalCost) * 100 : 0), "pct"]] },
+};
+const fmtCell = (v, kind) => kind === "money" ? money(v) : kind === "pct" ? num(v).toFixed(1) + "%" : qty(v);
+let detailMetric = null;
+function openDetail(metric) { if (!DASH_METRICS[metric]) return; detailMetric = metric; renderDetail(); document.getElementById("detailOvl").classList.add("open"); }
+function closeDetail() { document.getElementById("detailOvl").classList.remove("open"); detailMetric = null; }
+function renderDetail() {
+  const m = DASH_METRICS[detailMetric]; if (!m) return;
+  const rows = dashFilteredList().filter((e) => stOf(e) !== "VOID").map((e) => ({ e, d: derive(e) }));
+  if (m.cols.length) rows.sort((a, b) => num(m.cols[0][1](b.e, b.d)) - num(m.cols[0][1](a.e, a.d))); // biggest contributors first
+  const sums = m.cols.map((c) => rows.reduce((s, r) => s + num(c[1](r.e, r.d)), 0));
+  const totalCells = m.cols.map((c, i) => c[2] === "pct"
+    ? `<td class="num">${sums[1] ? (sums[0] / sums[1] * 100).toFixed(1) + "%" : "—"}</td>` // aggregate ratio, not a sum
+    : `<td class="num">${fmtCell(sums[i], c[2])}</td>`).join("");
+  document.getElementById("detailTitle").textContent = m.title + " — breakdown";
+  document.getElementById("detailSub").textContent = `${rows.length} departure${rows.length === 1 ? "" : "s"} in the current view · tap a row to open it`;
+  document.getElementById("detailBody").innerHTML = `
+    <div style="overflow-x:auto"><table><thead>
+      <tr><th>Package</th><th>Tour Code</th><th>Travel Date</th><th>Status</th>${m.cols.map((c) => `<th class="num">${esc(c[0])}</th>`).join("")}</tr>
+    </thead><tbody>
+      ${rows.map(({ e, d }) => { const s = stOf(e); return `<tr data-detopen="${e.id}" style="cursor:pointer">
+        <td>${esc(e.package || "(no package)")}</td>
+        <td><span class="pkg-name">${esc(e.tourCode || "(untitled)")}</span></td>
+        <td>${esc(e.travelRaw || "—")}</td>
+        <td><span class="sttag ${stClass(s)}">${s}</span></td>
+        ${m.cols.map((c) => `<td class="num">${fmtCell(c[1](e, d), c[2])}</td>`).join("")}
+      </tr>`; }).join("") || `<tr><td colspan="${4 + m.cols.length}" style="text-align:center;padding:22px;color:var(--muted)">No departures in this view.</td></tr>`}
+    </tbody><tfoot>
+      <tr class="totrow"><td>TOTAL</td><td>${qty(rows.length)} dep</td><td></td><td></td>${totalCells}</tr>
+    </tfoot></table></div>`;
 }
 function packagesOf(entries) {
   const m = new Map();
@@ -2838,6 +2908,7 @@ document.getElementById("editor").addEventListener("click", (ev) => {
   if (ev.target.closest("[data-statfilter-clear]")) { ev.stopPropagation(); statsSel.clear(); renderStatsDD(); renderEditor(); return; }
   if (ev.target.closest("[data-statclear]")) { statsSel.clear(); statFrom = ""; statTo = ""; statStatus = "all"; statsFilterQ = ""; statsFilterOpen = false; renderStatsDD(); renderEditor(); return; } // Clear the user filters (destination stays on the current section)
   if (ev.target.closest(".pf-panel")) { ev.stopPropagation(); return; } // clicks inside the open dropdown (checkbox labels) stay open
+  const mtile = ev.target.closest("[data-metric]"); if (mtile) return openDetail(mtile.dataset.metric); // tile -> breakdown
   const open = ev.target.closest("[data-open]");            // dashboard table row -> open that departure
   if (open) return selectEntry(open.dataset.open);
   const v = ev.target.closest("[data-void]");               // VOID is the only manual status
