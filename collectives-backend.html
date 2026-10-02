@@ -2153,8 +2153,8 @@ const DASH_METRICS = {
   receivable:  { title: "Receivable from Pax", cols: [["Receivable", (e, d) => d.receivable, "money"]] },
   profit:      { title: "Profit", cols: [["Profit", (e, d) => d.profit, "money"]] },
   roi:         { title: "ROI", cols: [["Profit", (e, d) => d.profit, "money"], ["Cost", (e) => num(e.totalCost), "money"], ["ROI", (e, d) => (num(e.totalCost) ? d.profit / num(e.totalCost) * 100 : 0), "pct"]] },
-  avgDays:     { title: "Days to sold out", filter: (e, d) => d.daysToSoldOut != null, asc: true, avgTotal: true, cols: [["Days to sold out", (e, d) => d.daysToSoldOut, "qty"], ["Slots Sold", (e, d) => d.slotSold, "qty"]] },
-  turnover:    { title: "Turnover rate", filter: (e, d) => d.daysToSoldOut != null, sortCol: 2, cols: [["Slots Sold", (e, d) => d.slotSold, "qty"], ["Days to sold out", (e, d) => d.daysToSoldOut, "qty"], ["Slots/day", (e, d) => d.perDay, "rate"]] },
+  avgDays:     { title: "Days to sold out", filter: (e, d) => d.daysToSoldOut != null, asc: true, avgTotal: true, dates: true, cols: [["Days to sold out", (e, d) => d.daysToSoldOut, "qty"], ["Slots Sold", (e, d) => d.slotSold, "qty"]] },
+  turnover:    { title: "Turnover rate", filter: (e, d) => d.daysToSoldOut != null, sortCol: 2, dates: true, cols: [["Slots Sold", (e, d) => d.slotSold, "qty"], ["Days to sold out", (e, d) => d.daysToSoldOut, "qty"], ["Slots/day", (e, d) => d.perDay, "rate"]] },
 };
 const fmtCell = (v, kind) => kind === "money" ? money(v) : kind === "pct" ? num(v).toFixed(1) + "%" : kind === "rate" ? num(v).toFixed(2) : qty(v);
 let detailMetric = null;
@@ -2173,21 +2173,25 @@ function renderDetail() {
     if (m.avgTotal && i === 0) return `<td class="num">${rows.length ? (sums[0] / rows.length).toFixed(1) : "—"}</td>`; // average, not a sum
     return `<td class="num">${fmtCell(sums[i], c[2])}</td>`;
   }).join("");
+  // turnover metrics also show the holding + sold-out dates the days are derived from
+  const dateCols = m.dates ? [["Holding date", (e) => e.holdingDate], ["Sold-out date", (e) => e.soldOutDate]] : [];
+  const fixedCount = 4 + dateCols.length; // Package, Tour Code, Travel Date, Status, [+ date cols]
   document.getElementById("detailTitle").textContent = m.title + " — breakdown";
   document.getElementById("detailSub").textContent = `${rows.length} departure${rows.length === 1 ? "" : "s"} in the current view · tap a row to open it`;
   document.getElementById("detailBody").innerHTML = `
     <div style="overflow-x:auto"><table><thead>
-      <tr><th>Package</th><th>Tour Code</th><th>Travel Date</th><th>Status</th>${m.cols.map((c) => `<th class="num">${esc(c[0])}</th>`).join("")}</tr>
+      <tr><th>Package</th><th>Tour Code</th><th>Travel Date</th><th>Status</th>${dateCols.map((c) => `<th>${esc(c[0])}</th>`).join("")}${m.cols.map((c) => `<th class="num">${esc(c[0])}</th>`).join("")}</tr>
     </thead><tbody>
       ${rows.map(({ e, d }) => { const s = stOf(e); return `<tr data-detopen="${e.id}" style="cursor:pointer">
         <td>${esc(e.package || "(no package)")}</td>
         <td><span class="pkg-name">${esc(e.tourCode || "(untitled)")}</span></td>
         <td>${esc(e.travelRaw || "—")}</td>
         <td><span class="sttag ${stClass(s)}">${s}</span></td>
+        ${dateCols.map((c) => `<td>${esc(c[1](e) || "—")}</td>`).join("")}
         ${m.cols.map((c) => `<td class="num">${fmtCell(c[1](e, d), c[2])}</td>`).join("")}
-      </tr>`; }).join("") || `<tr><td colspan="${4 + m.cols.length}" style="text-align:center;padding:22px;color:var(--muted)">No departures in this view.</td></tr>`}
+      </tr>`; }).join("") || `<tr><td colspan="${fixedCount + m.cols.length}" style="text-align:center;padding:22px;color:var(--muted)">No departures in this view.</td></tr>`}
     </tbody><tfoot>
-      <tr class="totrow"><td>TOTAL</td><td>${qty(rows.length)} dep</td><td></td><td></td>${totalCells}</tr>
+      <tr class="totrow"><td>TOTAL</td><td>${qty(rows.length)} dep</td>${"<td></td>".repeat(fixedCount - 2)}${totalCells}</tr>
     </tfoot></table></div>`;
 }
 function packagesOf(entries) {
